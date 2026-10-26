@@ -226,8 +226,6 @@ These files contain the architecture, vocabulary and weights but no optimizer or
 sampling RNG state. They support inference and weights-only initialization, not
 exact training resume. Generation records the loaded checkpoint's SHA-256 checksum.
 
-## Verification and attribution
-
 ## Reproduction stages
 
 Like HW1, `scripts/reproduce_all.sh` collects the experiment commands in one place.
