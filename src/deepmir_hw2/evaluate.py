@@ -101,6 +101,10 @@ def evaluate(args):
         sequences = read_json(directory / "sequences.json")
         if not sequences:
             raise ValueError("No sequences to evaluate")
+        if (directory / "generation.json").exists():
+            generation = read_json(directory / "generation.json")
+            if not generation["complete"] or len(sequences) != generation["expected_pieces"]:
+                raise ValueError("Generation is incomplete; refusing a partial-piece average")
         implementation = Path(args.ta_scripts) / "eval_basic.py"
         ta = load_ta_basic(args.ta_scripts, args.musdr_root)
         state = random.getstate()

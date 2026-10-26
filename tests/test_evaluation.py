@@ -1,10 +1,12 @@
+from argparse import Namespace
 from pathlib import Path
 
 import pytest
 
-from deepmir_hw2.evaluate import compute_basic, load_ta_basic
+from deepmir_hw2.evaluate import compute_basic, evaluate, load_ta_basic
 from deepmir_hw2.music import BarTiming
 from deepmir_hw2.tokens import MusicTokenizer, TokenizerConfig
+from deepmir_hw2.utils import write_json
 
 
 @pytest.mark.skipif(
@@ -45,3 +47,12 @@ def test_final_empty_bar_is_retained_in_ta_evaluation_view():
     sequence = tokenizer.evaluation_tokens([empty] * 4)
     assert sequence[-1] == "<EOS>"
     assert sequence.count("Bar") == 4
+
+
+def test_partial_generation_is_not_reported_as_a_complete_experiment(tmp_path):
+    tokenizer = MusicTokenizer()
+    write_json(tmp_path / "tok2idx.json", tokenizer.evaluation_vocabulary())
+    write_json(tmp_path / "sequences.json", [{"song_name": "001", "tokens": []}])
+    write_json(tmp_path / "generation.json", {"expected_pieces": 2, "complete": False})
+    with pytest.raises(ValueError, match="incomplete"):
+        evaluate(Namespace(task="basic", input=str(tmp_path), output=str(tmp_path / "metrics.csv")))

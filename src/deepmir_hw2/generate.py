@@ -323,6 +323,8 @@ def generate(args):
                 "checkpoint_sha256": digest,
                 "checkpoint_step": saved["step"],
                 "sampling": asdict(sampling),
+                "expected_pieces": len(jobs),
+                "complete": len(records) == len(jobs),
                 "songs": records,
             },
         )
