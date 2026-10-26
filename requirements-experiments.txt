@@ -1,0 +1,6 @@
+# Additional dependencies for development and evaluation, not required for inference.
+-r requirements.txt
+scipy==1.18.1
+pandas==2.3.3
+pytest==8.4.2
+ruff==0.17.2

@@ -1,0 +1,9 @@
+# Inference environment verified on Linux / Python 3.12 / CUDA 12.8.
+# Install the desired CUDA/CPU build of torch first when using a custom wheel index.
+torch==2.8.0
+transformers==4.57.1
+numpy==2.5.4
+pretty-midi==0.2.11
+mido==1.3.3
+tqdm==4.70.1
+-e .
