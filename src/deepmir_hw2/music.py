@@ -48,7 +48,7 @@ class BeatGrid:
         i = max(0, min(len(self.times) - 2, int(np.floor(beat))))
         return self.times[i] + (beat - i) * (self.times[i + 1] - self.times[i])
 
-    def boundaries(self, last_onset=None):
+    def boundaries(self, last_onset=None, *, last_note_onset=None):
         down = list(self.downbeats)
         if last_onset is None:
             if len(down) < 2:
@@ -58,7 +58,14 @@ class BeatGrid:
         if len(down) == 1:
             down.append(len(self.times))
         width = down[-1] - down[-2]
-        while down[-1] < self.to_beat(last_onset) - 1e-7:
+
+        def needs_terminal_bar():
+            boundary_us = round(self.to_seconds(down[-1]) * 1_000_000)
+            return round(last_onset * 1_000_000) > boundary_us or (
+                last_note_onset is not None and round(last_note_onset * 1_000_000) >= boundary_us
+            )
+
+        while needs_terminal_bar():
             down.append(down[-1] + width)
         return down
 
@@ -177,7 +184,15 @@ def write_midi(path, instruments, timings, origin_us=0):
 
     def make_track(events):
         track, previous = mido.MidiTrack(), 0
-        for absolute, message in sorted(events, key=lambda item: item[0]):
+
+        def event_order(item):
+            absolute, message = item
+            # A retrigger at the same tick must not be cancelled by the previous
+            # note's release, even if the input Note objects were unsorted.
+            priority = 0 if message.type == "note_off" else 1
+            return absolute, priority
+
+        for absolute, message in sorted(events, key=event_order):
             delta = absolute - previous
             if delta > 0x0FFFFFFF:
                 raise ValueError("Event gap exceeds standard MIDI delta-time capacity")

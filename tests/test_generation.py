@@ -126,8 +126,12 @@ def test_actual_model_cache_matches_full_history(tiny_config, task):
     torch.testing.assert_close(actual, expected)
 
 
-def test_bonus_inference_never_reads_chords_or_reference_piano(tmp_path, monkeypatch, tiny_config):
+@pytest.mark.parametrize("audio", ["none", "success", "failure"])
+def test_bonus_inference_never_reads_chords_or_reference_piano(
+    tmp_path, monkeypatch, tiny_config, audio
+):
     import deepmir_hw2.generate as generation
+    from deepmir_hw2.utils import read_json
 
     prompt = tmp_path / "prompts/001"
     prompt.mkdir(parents=True)
@@ -167,21 +171,44 @@ def test_bonus_inference_never_reads_chords_or_reference_piano(tmp_path, monkeyp
         raise AssertionError("Bonus inference read chord annotations")
 
     monkeypatch.setattr(generation, "load_chords", reject_chord_access)
-    generation.generate(
-        Namespace(
-            checkpoint=str(checkpoint),
-            mode="accompany",
-            prompts=str(prompt.parent),
-            output=str(tmp_path / "output"),
-            count=20,
-            bars=None,
-            seed=42,
-            temperature=0.9,
-            top_k=1,
-            top_p=1.0,
-            device="cpu",
-        )
+    audio_calls = []
+
+    def fake_render(args):
+        metadata = read_json(tmp_path / "output/generation.json")
+        assert metadata["midi_complete"] is True
+        assert metadata["complete"] is False
+        audio_calls.append(args)
+        if audio == "failure":
+            raise RuntimeError("synthetic renderer failure")
+
+    monkeypatch.setattr(generation, "validate_render_settings", lambda *args: None)
+    monkeypatch.setattr(generation, "render", fake_render)
+    args = Namespace(
+        checkpoint=str(checkpoint),
+        mode="accompany",
+        prompts=str(prompt.parent),
+        output=str(tmp_path / "output"),
+        count=20,
+        bars=None,
+        seed=42,
+        temperature=0.9,
+        top_k=1,
+        top_p=1.0,
+        device="cpu",
+        soundfont=None if audio == "none" else str(tmp_path / "test.sf2"),
+        fluidsynth="fluidsynth",
+        sample_rate=44100,
     )
+    if audio == "failure":
+        with pytest.raises(RuntimeError, match="renderer failure"):
+            generation.generate(args)
+        assert read_json(tmp_path / "output/generation.json")["complete"] is False
+    else:
+        generation.generate(args)
+        metadata = read_json(tmp_path / "output/generation.json")
+        assert metadata["complete"] is True
+        assert metadata["audio_complete"] is (audio == "success")
+    assert len(audio_calls) == (0 if audio == "none" else 1)
     assert model.encoder_calls == 1
     assert not any(token in tokenizer.groups["Chord"] for token in model.encoder_input_ids[0])
     result = mido.MidiFile(tmp_path / "output/001.mid")

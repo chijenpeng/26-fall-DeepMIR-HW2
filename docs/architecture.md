@@ -21,9 +21,9 @@ Paths are relative to src/deepmir_hw2/.
 | data.py | Song split, complete windows, joint chord/note transposition, padding and context requirement |
 | models.py | Random GPT-2/T5, no pretrained weights |
 | train.py | Weighted loss, AdamW/AMP/accumulation, sampled validation, atomic checkpoints/resume; reject insufficient context |
-| generate.py | Full-history cache; learned basic timing; supplied Bonus timing; legal event syntax without note-count rules |
+| generate.py | Full-history cache; learned basic timing; supplied Bonus timing; optional MIDI/WAV listening output in one command |
 | reference.py | All-song/all-meter default reference; explicit optional subsets |
-| evaluate.py | Unmodified TA metric functions, seeded sampling and coverage reporting |
+| evaluate.py | Unmodified TA metric functions, seeded sampling and coverage reporting; reject incomplete/undefined comparisons |
 | render.py | Explicit FluidSynth/SoundFont rendering and PCM checks |
 | export.py | Inference weights/config/vocabulary/source programs without optimizer |
 | utils.py | Atomic JSON, hashes, seeds and device selection |
@@ -53,4 +53,7 @@ fails; neither training nor generation silently shortens music or discards histo
 
 Old vocabulary/memory measurements no longer apply. Revised full-data preprocessing,
 GPU benchmarks, complete experiments, WAV synthesis and report are pending. Current
-evidence is synthetic CPU testing, detailed in README and tests/.
+evidence includes synthetic CPU testing and read-only validation of all 896 training
+sources plus codec checks for all 13 supplied prompts. No new prepared dataset was
+created. The audit fixed terminal-downbeat notes and added same-tick MIDI note-release
+ordering, exact source-count enforcement and integrated listening-sample rendering.

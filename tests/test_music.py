@@ -105,3 +105,26 @@ def test_export_meter_and_seconds_agree_with_annotated_bars(tmp_path, pulses, ba
 def test_invalid_grid_rejected():
     with pytest.raises(ValueError, match="strictly increasing"):
         BeatGrid((0.0, 0.0), (0,))
+
+
+def test_terminal_downbeat_note_gets_its_final_bar_without_extending_a_pedal_release():
+    grid = BeatGrid((0.0, 0.5, 1.0), (0, 2))
+    assert grid.boundaries(1.0, last_note_onset=1.0) == [0, 2, 4]
+    assert grid.boundaries(1.0, last_note_onset=0.25) == [0, 2]
+
+
+def test_same_tick_retrigger_releases_old_note_before_starting_new_note(tmp_path):
+    from deepmir_hw2.music import BarTiming
+
+    inst = pretty_midi.Instrument(0)
+    inst.notes = [pretty_midi.Note(80, 60, 0.5, 1.0), pretty_midi.Note(70, 60, 0.0, 0.5)]
+    path = tmp_path / "retrigger.mid"
+    write_midi(path, [inst], [BarTiming((500_000,) * 4, 4, 4)])
+    raw = mido.MidiFile(path)
+    tick, events = 0, []
+    for event in raw.tracks[1]:
+        tick += event.time
+        if event.type in {"note_on", "note_off"}:
+            events.append((tick, event.type))
+    shared = raw.ticks_per_beat
+    assert [kind for time, kind in events if time == shared] == ["note_off", "note_on"]

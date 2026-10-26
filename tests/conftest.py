@@ -32,7 +32,7 @@ def prepared(tmp_path):
         )
         (folder / "chord_midi.txt").write_text("0 8 C:maj\n")
     output = tmp_path / "prepared"
-    prepare(Namespace(dataset=str(source), output=str(output)))
+    prepare(Namespace(dataset=str(source), output=str(output), expected_songs=4))
     return output
 
 

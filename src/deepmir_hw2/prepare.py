@@ -22,7 +22,8 @@ def pack_bars(bars):
 def load_song(folder):
     midi = pretty_midi.PrettyMIDI(str(folder / f"{folder.name}.mid"))
     grid = BeatGrid.load(folder / "beat_midi.txt")
-    boundaries = grid.boundaries(event_end_time(midi))
+    last_note = max((note.start for inst in midi.instruments for note in inst.notes), default=None)
+    boundaries = grid.boundaries(event_end_time(midi), last_note_onset=last_note)
     return midi, grid, boundaries
 
 
@@ -46,6 +47,8 @@ def prepare(args):
     folders = sorted(path for path in source.iterdir() if path.is_dir())
     if not folders:
         raise ValueError("No training songs found")
+    if len(folders) != args.expected_songs:
+        raise ValueError(f"Expected {args.expected_songs} training songs, found {len(folders)}")
 
     # Derive the finite musical vocabulary from provided training information.
     beats, meters, chords = set(), set(), set()
@@ -126,4 +129,5 @@ def add_parser(subparsers):
     parser = subparsers.add_parser("prepare", help=__doc__)
     parser.add_argument("--dataset", default="POP909/training")
     parser.add_argument("--output", default="data/prepared")
+    parser.add_argument("--expected-songs", type=int, default=896)
     parser.set_defaults(func=prepare)

@@ -4,8 +4,8 @@ Chi-Jen Peng (R14725022)
 
 **Status:** formal preprocessing, training and experiments are paused. Obsolete prepared
 data, smoke checkpoints and outputs were deleted locally and on both servers. Original
-POP909 data remains. Current verification uses synthetic CPU tests only; no final
-model, listening collection or report is claimed.
+POP909 data remains. Current verification includes read-only source-data audits and
+synthetic CPU tests; no final model, listening collection or report is claimed.
 
 See [module guide](docs/architecture.md), [assignment checklist](docs/requirements.md)
 and [source attribution](THIRD_PARTY.md).
@@ -37,6 +37,38 @@ and PyTorch 2.8.0/CUDA 12.8 without sudo/system-Python changes. Versions are rec
 environment.freeze.txt. WAV synthesis additionally requires FluidSynth and a licensed
 .sf2 SoundFont, which has not yet been selected or validated.
 
+Install the non-pip renderer before requesting listening samples:
+
+~~~bash
+# Debian / Ubuntu
+sudo apt-get update
+sudo apt-get install fluidsynth timgm6mb-soundfont
+# macOS alternative
+brew install fluid-synth
+~~~
+
+See [FluidSynth installation](https://www.fluidsynth.org/download/) for platform details.
+The documented Debian package supplies an example SoundFont at
+/usr/share/sounds/sf2/TimGM6mb.sf2 ([package file list](https://packages.debian.org/sid/all/timgm6mb-soundfont/filelist)).
+Pass the chosen font explicitly and use the same one for comparisons. It is a rendering
+asset, not training data; no font is silently selected by the model.
+
+## Submission inference entry point
+
+With an exported checkpoint supplied, no training or preprocessing is needed:
+
+~~~bash
+deepmir generate --checkpoint models/basic.pt --mode unconditional --count 20 --bars 32 \
+  --output /absolute/path/listening-samples --soundfont /usr/share/sounds/sf2/TimGM6mb.sf2
+deepmir generate --checkpoint models/bonus.pt --mode accompany \
+  --prompts POP909/prompts/bonus --output /absolute/path/accompaniment \
+  --soundfont /absolute/path/piano.sf2
+~~~
+
+This generates MIDI and WAV together. Renderer requirements are checked before
+model inference. A WAV failure leaves the batch explicitly incomplete; it cannot
+be averaged or submitted as a completed run. Exported final checkpoints are still pending.
+
 ## Data and source preservation
 
 Supply POP909/training/{song}/{song}.mid, beat_midi.txt and chord_midi.txt; continuation
@@ -48,6 +80,9 @@ After work is resumed:
 ~~~bash
 deepmir prepare --dataset POP909/training --output data/prepared
 ~~~
+
+The command requires exactly 896 source song folders by default. Missing songs
+cannot silently turn an incomplete dataset into an all-training run.
 
 The current event codec retains annotated pulse durations, supplied meter, full MIDI
 pitches 0–127, original positive velocities 1–127, controllers/pedal, pitch bends and
@@ -174,7 +209,9 @@ deepmir export --checkpoint runs/basic-final --output models/basic.pt
 deepmir export --checkpoint runs/bonus-final --output models/bonus.pt
 ~~~
 
-Rendering is a separate command and is not yet verified with a real SoundFont.
+Rendering is available both through generate --soundfont and the separate render
+command. The external process/PCM/failure handling has synthetic tests; a real
+SoundFont has not yet been selected or verified.
 Submit 20 selected basic-A pairs, 9 continuation pairs (mark each prompt's best),
 10 bonus pairs, source/inference weights/README/requirements and the 16:9 report.
 
@@ -194,8 +231,12 @@ pytest -q
 Synthetic CPU tests cover microsecond timing/full MIDI values, pedal, long tails,
 silence/dense/duplicate notes, consistent exported bars, full-context errors, actual
 GPT-2/T5 cache agreement, complete sampled windows, joint chord/note augmentation,
-all-meter reference inclusion, exact CPU resume and original TA metrics.
+all-meter reference inclusion, exact CPU resume, undefined-metric rejection and
+original TA metrics. Terminal downbeat notes and same-tick retriggers have regressions.
 
 The Bonus access test deliberately puts invalid chord/piano files beside a valid
 melody and verifies neither is consumed. Full POP909 preparation, GPU memory/performance,
 musical quality, formal experiments, WAV collection and report remain pending.
+The read-only source audit checked all 896 training songs and successfully encoded
+the three 8-bar continuation prompts and ten 16-bar melody prompts. It did not
+create prepared training arrays, checkpoints or model-generated samples.

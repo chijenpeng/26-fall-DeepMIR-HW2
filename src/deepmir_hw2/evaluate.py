@@ -134,12 +134,15 @@ def evaluate(args):
         "implementation_sha256": hashlib.sha256(implementation.read_bytes()).hexdigest(),
         "seed": args.seed,
     }
+    summary["complete"] = all(count == len(frame) for count in summary["valid_pieces"].values())
     if args.task == "basic":
         summary["musdr_sha256"] = hashlib.sha256(
             (Path(args.musdr_root) / "musdr/side_utils.py").read_bytes()
         ).hexdigest()
     write_json(output.with_suffix(".summary.json"), summary)
     print(summary)
+    if not summary["complete"]:
+        raise ValueError("Undefined metrics remain; refusing to report a complete experiment")
 
 
 def add_parser(subparsers):

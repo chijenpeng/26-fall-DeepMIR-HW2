@@ -2,6 +2,7 @@
 
 import hashlib
 import math
+from argparse import Namespace
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -11,9 +12,10 @@ from tqdm import tqdm
 from .models import build_model
 from .music import BarTiming, BeatGrid, combine_with_prompt, write_midi
 from .prepare import load_chords
+from .render import render, validate_render_settings
 from .tokens import MAX_INTEGER, MusicTokenizer
 from .train import checkpoint_path, load_checkpoint
-from .utils import choose_device, write_json
+from .utils import choose_device, read_json, write_json
 
 
 @dataclass(frozen=True)
@@ -213,6 +215,8 @@ def generate(args):
     )
     if args.count < 1 or bars_to_generate < 1:
         raise ValueError("count and bars must be positive")
+    if args.soundfont:
+        validate_render_settings(args.soundfont, args.fluidsynth, args.sample_rate)
     output = Path(args.output)
     if output.exists() and any(output.iterdir()):
         raise FileExistsError(f"Use an empty output directory: {output}")
@@ -324,10 +328,26 @@ def generate(args):
                 "checkpoint_step": saved["step"],
                 "sampling": asdict(sampling),
                 "expected_pieces": len(jobs),
-                "complete": len(records) == len(jobs),
+                "midi_complete": len(records) == len(jobs),
+                "audio_requested": bool(args.soundfont),
+                "audio_complete": False,
+                "complete": len(records) == len(jobs) and not args.soundfont,
                 "songs": records,
             },
         )
+    if args.soundfont:
+        render(
+            Namespace(
+                input=str(output),
+                output=str(output),
+                soundfont=args.soundfont,
+                fluidsynth=args.fluidsynth,
+                sample_rate=args.sample_rate,
+            )
+        )
+        metadata = read_json(output / "generation.json")
+        metadata["audio_complete"] = metadata["complete"] = True
+        write_json(output / "generation.json", metadata)
 
 
 def add_parser(subparsers):
@@ -343,4 +363,9 @@ def add_parser(subparsers):
     parser.add_argument("--top-k", type=int, default=50)
     parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--soundfont", help="Also produce WAV listening samples in the output directory"
+    )
+    parser.add_argument("--fluidsynth", default="fluidsynth")
+    parser.add_argument("--sample-rate", type=int, default=44100)
     parser.set_defaults(func=generate)
