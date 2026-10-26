@@ -26,11 +26,13 @@ def prepared(tmp_path):
             ]
             midi.instruments.append(inst)
         midi.write(str(folder / f"{folder.name}.mid"))
+        pulses = 6 if song == 3 else 4
         (folder / "beat_midi.txt").write_text(
-            "\n".join(f"{i / 2} 0 {1 if i % 4 == 0 else 0}" for i in range(17))
+            "\n".join(f"{i / 2} 0 {1 if i % pulses == 0 else 0}" for i in range(4 * pulses + 1))
         )
+        (folder / "chord_midi.txt").write_text("0 8 C:maj\n")
     output = tmp_path / "prepared"
-    prepare(Namespace(dataset=str(source), output=str(output), positions_per_beat=12))
+    prepare(Namespace(dataset=str(source), output=str(output)))
     return output
 
 
@@ -40,7 +42,7 @@ def tiny_config():
         "task": "basic",
         "seed": 7,
         "model": {"width": 16, "layers": 1, "heads": 2, "dropout": 0.1},
-        "data": {"bars": 2, "max_tokens": 64, "validation_fraction": 0.25, "transpose": 2},
+        "data": {"bars": 2, "max_tokens": 256, "validation_fraction": 0.25, "transpose": 2},
         "training": {
             "steps": 4,
             "batch_size": 2,

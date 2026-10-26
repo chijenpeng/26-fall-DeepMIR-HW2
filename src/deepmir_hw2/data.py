@@ -15,6 +15,8 @@ class MusicCorpus:
         directory = Path(directory)
         self.tokenizer = MusicTokenizer.load(directory / "tokenizer.json")
         self.manifest = read_json(directory / "manifest.json")
+        if self.manifest["version"] != self.tokenizer.version:
+            raise ValueError("Prepared data uses an unsupported format")
         expected = self.manifest["fingerprint"]
         if fingerprint({k: v for k, v in self.manifest.items() if k != "fingerprint"}) != expected:
             raise ValueError("Preprocessed manifest integrity check failed")
@@ -35,6 +37,16 @@ class MusicCorpus:
             raise ValueError("Need at least one training song")
         return sorted(names[count:]), sorted(names[:count])
 
+    def required_context(self, task: str, bars: int) -> int:
+        tracks = ["basic"] if task == "basic" else ["melody", "piano"]
+        maximum = 0
+        for song in self.songs.values():
+            for track in tracks:
+                offsets = song[f"{track}_offsets"]
+                count = min(bars, len(offsets) - 1)
+                maximum = max(maximum, int((offsets[count:] - offsets[:-count]).max()))
+        return maximum + 2
+
     def sample(
         self,
         names: list[str],
@@ -47,14 +59,16 @@ class MusicCorpus:
         song = self.songs[rng.choice(names)]
         tracks = ["basic"] if task == "basic" else ["melody", "piano"]
         n_bars = len(song[f"{tracks[0]}_offsets"]) - 1
-        start = rng.randrange(n_bars)
+        start = rng.randrange(max(1, n_bars - bars + 1))
         end = min(n_bars, start + bars)
         for track in tracks:
             offsets = song[f"{track}_offsets"]
-            while end > start and offsets[end] - offsets[start] + 2 > max_tokens:
-                end -= 1
-        if end == start:
-            raise ValueError("A single bar exceeds max_tokens; increase context length")
+            required = int(offsets[end] - offsets[start]) + 2
+            if required > max_tokens:
+                raise ValueError(
+                    f"Complete {end - start}-bar {track} window requires {required} tokens; "
+                    f"configured context is {max_tokens}. No bars were truncated."
+                )
         sequences = []
         for track in tracks:
             offsets = song[f"{track}_offsets"]

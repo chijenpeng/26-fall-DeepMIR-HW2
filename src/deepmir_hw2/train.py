@@ -109,6 +109,14 @@ def train(args: argparse.Namespace) -> None:
         raise ValueError("CPU smoke tests require precision=fp32")
     seed_everything(config["seed"])
     corpus = MusicCorpus(args.data)
+    if d["max_tokens"] == "auto":
+        d["max_tokens"] = corpus.required_context(config["task"], d["bars"])
+    required = corpus.required_context(config["task"], d["bars"])
+    if d["max_tokens"] < required:
+        raise ValueError(
+            f"Provided complete windows require {required} tokens; configured max_tokens="
+            f"{d['max_tokens']}. Increase context instead of truncating music."
+        )
     training_names, validation_names = corpus.split(config["seed"], d["validation_fraction"])
     model = build_model(config, corpus.tokenizer).to(device)
     if t.get("gradient_checkpointing"):
@@ -310,13 +318,14 @@ def train(args: argparse.Namespace) -> None:
                     save_checkpoint(
                         path,
                         {
-                            "format_version": 1,
+                            "format_version": 2,
                             "model": model.state_dict(),
                             "optimizer": optimizer.state_dict(),
                             "scaler": scaler.state_dict(),
                             "config": config,
                             "tokenizer_tokens": corpus.tokenizer.tokens,
                             "tokenizer_config": corpus.tokenizer.config.__dict__,
+                            "source_programs": corpus.manifest["source_programs"],
                             "data_fingerprint": corpus.manifest["fingerprint"],
                             "step": step,
                             "best_loss": best_loss,

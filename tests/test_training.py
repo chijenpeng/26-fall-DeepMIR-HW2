@@ -6,7 +6,9 @@ import pytest
 import torch
 
 from deepmir_hw2.data import MusicCorpus
+from deepmir_hw2.reference import reference
 from deepmir_hw2.train import load_checkpoint, train
+from deepmir_hw2.utils import read_json
 
 
 def arguments(config, data, output, **kwargs):
@@ -38,6 +40,39 @@ def test_song_split_and_paired_target_alignment(prepared):
     piano = [t for t in sample["labels"] if t in pitch_ids]
     assert len(melody) == len(piano)
     assert all(m - p == 12 for m, p in zip(melody, piano, strict=True))
+
+
+def test_context_does_not_shorten_requested_training_window(prepared):
+    corpus = MusicCorpus(prepared)
+    names = sorted(corpus.songs)
+    with pytest.raises(ValueError, match="No bars were truncated"):
+        corpus.sample(names, random.Random(42), "basic", 2, 10)
+    needed = corpus.required_context("basic", 2)
+    for seed in range(10):
+        sample = corpus.sample(names, random.Random(seed), "basic", 2, needed)
+        assert sample["input_ids"].count(corpus.tokenizer.bar_id) == 2
+
+
+def test_real_reference_default_includes_all_songs_and_meters(prepared, tmp_path):
+    output = tmp_path / "reference"
+    reference(Namespace(data=str(prepared), output=str(output), count=None, bars=None, seed=42))
+    metadata = read_json(output / "reference.json")
+    assert metadata["source_songs"] == metadata["evaluated_songs"] == 4
+    assert metadata["subset_requested"] is False
+    assert metadata["skipped_short_songs"] == []
+    assert {item["song_name"] for item in read_json(output / "sequences.json")} == {
+        "000",
+        "001",
+        "002",
+        "003",
+    }
+
+
+def test_basic_augmentation_transposes_given_chord_with_notes(prepared):
+    tokenizer = MusicCorpus(prepared).tokenizer
+    sequence = [tokenizer.tok2idx["Chord_C:maj"], tokenizer.tok2idx["Pitch_60"]]
+    shifted = tokenizer.transpose(sequence, 2)
+    assert shifted == [tokenizer.tok2idx["Chord_D:maj"], tokenizer.tok2idx["Pitch_62"]]
 
 
 @pytest.mark.parametrize("task", ["basic", "bonus"])

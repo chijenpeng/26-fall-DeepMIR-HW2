@@ -2,35 +2,46 @@ from pathlib import Path
 
 import pytest
 
-from deepmir_hw2.evaluate import compute_basic, load_module
-from deepmir_hw2.tokens import MusicTokenizer
+from deepmir_hw2.evaluate import compute_basic, load_ta_basic
+from deepmir_hw2.music import BarTiming
+from deepmir_hw2.tokens import MusicTokenizer, TokenizerConfig
 
 
 @pytest.mark.skipif(
     not Path("third_party/MusDr/musdr/side_utils.py").exists(),
-    reason="Install MusDr for external-metric integration tests",
+    reason="Install MusDr for external metric tests",
 )
-def test_musdr_constant_pitch_and_identical_rhythm():
-    tokenizer = MusicTokenizer()
-    bar = [
-        tokenizer.bar_id,
-        tokenizer.tok2idx["Beats_4"],
-        tokenizer.tok2idx["Pos_0"],
-        tokenizer.tok2idx["Pitch_60"],
-        tokenizer.tok2idx["Vel_20"],
-        tokenizer.tok2idx["Dur_12"],
-    ]
-    musdr = load_module(Path("third_party/MusDr/musdr/side_utils.py"))
-    metrics = compute_basic(bar * 32, tokenizer, musdr)
-    assert metrics["H1"] == pytest.approx(0.0)
-    assert metrics["H4"] == pytest.approx(0.0)
-    assert metrics["GS"] == pytest.approx(1.0)
-    assert metrics["bars"] == 32
-    assert metrics["empty_bars"] == 0
+def test_metrics_match_unmodified_ta_functions_including_gs_denominator():
+    tokenizer = MusicTokenizer(TokenizerConfig((4, 6), ((4, 4),)))
+    bars = []
+    for index in range(32):
+        bar = tokenizer.header(BarTiming((500_000,) * (4 if index % 2 else 6), 4, 4))
+        bar += [
+            tokenizer.tok2idx["Pos"],
+            *tokenizer.encode_uint(250_000 if index % 2 else 0),
+            tokenizer.tok2idx["Pitch_60"],
+            tokenizer.tok2idx["Vel_80"],
+            tokenizer.tok2idx["Duration"],
+            *tokenizer.encode_uint(500_000),
+        ]
+        bars.append(bar)
+    vocabulary = tokenizer.evaluation_vocabulary()
+    sequence = [vocabulary[token] for token in tokenizer.evaluation_tokens(bars)]
+    ta = load_ta_basic("HW2_scripts", "third_party/MusDr")
+    result = compute_basic(sequence, vocabulary, ta)
+    positions = [vocabulary[f"Pos_{i}"] for i in range(128)]
+    pitches = [vocabulary[f"Pitch_{i}"] for i in range(128)]
+    assert result["H4"] == pytest.approx(0)
+    assert result["GS"] == ta.compute_piece_groove_similarity(
+        sequence, vocabulary["Bar"], positions, pitches
+    )
+    assert result["GS"] == pytest.approx(1 - (16 * 16 * 2) / (496 * 128))
+    assert result["bars"] == 32
 
 
-def test_basic_evaluation_rejects_incompatible_meter():
+def test_final_empty_bar_is_retained_in_ta_evaluation_view():
     tokenizer = MusicTokenizer()
-    bar = [tokenizer.bar_id, tokenizer.tok2idx["Beats_6"]]
-    with pytest.raises(ValueError, match="Bar length"):
-        compute_basic(bar * 4, tokenizer, None)
+    empty = tokenizer.header(BarTiming((500_000,) * 4, 4, 4))
+    sequence = tokenizer.evaluation_tokens([empty] * 4)
+    assert sequence[-1] == "<EOS>"
+    assert sequence.count("Bar") == 4
