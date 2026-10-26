@@ -1,8 +1,9 @@
 # Development workflow
 
-Formal training and experiments are paused. Do not start data processing, GPU jobs,
-sample generation or audio rendering until the author asks to resume. Repository
-maintenance and synthetic CPU CI checks do not launch jobs on the training servers.
+The author resumed formal training and experiments on 2026-10-26. Authorized GPUs
+are emma's physical GPUs 0/1 and loopy's physical GPU 1 only. Check existing jobs
+before launching; never interrupt other users' work. See docs/experiments.md for
+active runs. Repository CI remains synthetic and does not launch server GPU jobs.
 
 Use Python 3.12 and install `requirements-experiments.txt`. Keep modules focused on
 their documented responsibilities; use local JSON configs rather than hard-coded
@@ -11,8 +12,8 @@ server paths or implicit model downloads.
 Before committing code:
 
 ```bash
-ruff check src tests
-ruff format --check src tests
+ruff check src tests scripts/benchmark_gpu.py
+ruff format --check src tests scripts/benchmark_gpu.py
 pytest -q
 ```
 

@@ -2,6 +2,7 @@
 
 from transformers import GPT2Config, GPT2LMHeadModel, T5Config, T5ForConditionalGeneration
 
+from .attention import use_chunked_t5_attention
 from .tokens import MusicTokenizer
 
 
@@ -44,5 +45,6 @@ def build_model(config: dict, tokenizer: MusicTokenizer):
         dropout_rate=model.get("dropout", 0.1),
         decoder_start_token_id=tokenizer.bos_id,
         use_cache=False,
+        query_block_size=model.get("query_block_size", 2048),
     )
-    return T5ForConditionalGeneration(architecture)
+    return use_chunked_t5_attention(T5ForConditionalGeneration(architecture))

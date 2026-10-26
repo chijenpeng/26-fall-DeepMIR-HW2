@@ -2,10 +2,10 @@
 
 Chi-Jen Peng (R14725022)
 
-**Status:** formal preprocessing, training and experiments are paused. Obsolete prepared
-data, smoke checkpoints and outputs were deleted locally and on both servers. Original
-POP909 data remains. Current verification includes read-only source-data audits and
-synthetic CPU tests; no final model, listening collection or report is claimed.
+**Status:** formal work resumed on 2026-10-26. All 896 songs were prepared on both
+servers with matching fingerprints. Development training is launching across the
+three authorized GPUs; see [run record](docs/experiments.md) for measured capacity,
+commands and progress. No final model, listening collection or report is claimed.
 
 See [module guide](docs/architecture.md), [assignment checklist](docs/requirements.md)
 and [source attribution](THIRD_PARTY.md).
@@ -75,7 +75,7 @@ Supply POP909/training/{song}/{song}.mid, beat_midi.txt and chord_midi.txt; cont
 prompts under POP909/prompts/basic-b; melody prompts under POP909/prompts/bonus. The
 provided TA scripts remain under HW2_scripts/.
 
-After work is resumed:
+Prepare from the original training data:
 
 ~~~bash
 deepmir prepare --dataset POP909/training --output data/prepared
@@ -98,28 +98,42 @@ Bonus melody/piano sequences exclude reference chords.
 
 Sources are hashed and all annotated bars, including silence, are retained. When the
 last event starts beyond the last annotated downbeat, the final supplied bar width and
-beat interval are extended to close that bar. This tail convention still needs full-data
-validation. Events that cannot be assigned are reported, never silently dropped.
+beat interval are extended to close that bar. All 896 sources passed preparation.
+Events that cannot be assigned are reported, never silently dropped.
 
 ## Training
 
 Architecture/optimizer candidates remain unchanged: basic 8 layers; bonus 4 encoder /
 6 decoder layers; width 512; 8 heads; AdamW/warmup/cosine, paired ±5-semitone augmentation,
-gradient accumulation and BF16.
+gradient accumulation and BF16. Basic microbatches now contain one window with 16
+accumulation steps, preserving the effective batch of 16 on each 12GB GPU. A second
+basic run compares learning rate 2e-4 against the initial 3e-4 with the same split.
 
 Context is now derived from the longest complete configured source window using
 **max_tokens: "auto"**. Explicitly insufficient capacity fails; training windows are
-never shortened and inference history is never discarded. The revised full-data memory
-footprint has not been benchmarked. Old smoke measurements do not apply.
+never shortened and inference history is never discarded. The measured required
+contexts are 25,451 tokens (basic) and 13,403 (bonus). Basic's longest window passed
+forward/backward/optimizer execution on a 12GB RTX 4070 SUPER. T5 uses query
+blocks with checkpointed recomputation, retaining every allowed key and learned
+relative position bias. The largest encoder, largest decoder and highest combined
+attention-workload windows all passed on the A4500.
+See the run record for timing/memory details; old-code smoke measurements do not apply.
+
+Basic development has a 30,000-step limit per learning-rate candidate. Bonus has a
+12,000-step limit and 500-step warmup: the measured initial 13.5 seconds/step made
+the original 30,000-step candidate exceed the Thursday deadline. This leaves time
+for all-song final training and required generation/evaluation. Convergence still
+needs validation and listening; a step limit is not a quality claim.
 
 ~~~bash
+# emma: physical GPUs 0 and 1, separate processes
+CUDA_VISIBLE_DEVICES=0 deepmir train --config configs/basic.json --output runs/basic
+CUDA_VISIBLE_DEVICES=1 deepmir train --config configs/basic-low-lr.json --output runs/basic-low-lr
 # loopy: physical GPU 1 only
-CUDA_VISIBLE_DEVICES=1 deepmir train --config configs/basic.json --output runs/basic
-# emma: physical GPU 0
-CUDA_VISIBLE_DEVICES=0 deepmir train --config configs/bonus.json --output runs/bonus
+CUDA_VISIBLE_DEVICES=1 deepmir train --config configs/bonus.json --output runs/bonus
 ~~~
 
-A future benchmark can use --stop-after 10 while preserving the intended schedule.
+A bounded benchmark can use --stop-after 10 while preserving the intended schedule.
 Use --resume runs/basic with the original configuration to resume. Atomic checkpoints
 retain model/optimizer/scaler/RNG/config/source programs and corpus fingerprint.
 SIGINT/SIGTERM requests save after the current optimizer step.
@@ -129,13 +143,14 @@ cross-entropy checkpoint is named best; that is not a listening-quality claim.
 A separate final stage must use all 896 songs after selecting settings:
 
 ~~~bash
-CUDA_VISIBLE_DEVICES=1 deepmir train --config configs/basic.json \
+CUDA_VISIBLE_DEVICES=0 deepmir train --config configs/basic.json \
   --init-from runs/basic --all-training --steps FINAL_STEPS --output runs/basic-final
-CUDA_VISIBLE_DEVICES=0 deepmir train --config configs/bonus.json \
+CUDA_VISIBLE_DEVICES=1 deepmir train --config configs/bonus.json \
   --init-from runs/bonus --all-training --steps FINAL_STEPS --output runs/bonus-final
 ~~~
 
-Replace FINAL_STEPS with a choice based on development convergence. Neither stage has run.
+Replace FINAL_STEPS with a choice based on development convergence. All-song final
+stages remain pending; the current runs use the development split.
 
 ## Inference
 

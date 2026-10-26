@@ -6,6 +6,7 @@
     "encoder_layers": 4,
     "decoder_layers": 6,
     "heads": 8,
+    "query_block_size": 2048,
     "dropout": 0.1
   },
   "data": {
@@ -15,12 +16,12 @@
     "transpose": 5
   },
   "training": {
-    "steps": 30000,
+    "steps": 12000,
     "batch_size": 1,
     "gradient_accumulation": 16,
     "learning_rate": 0.0003,
     "weight_decay": 0.01,
-    "warmup_steps": 1000,
+    "warmup_steps": 500,
     "min_lr_ratio": 0.1,
     "gradient_clip": 1.0,
     "precision": "bf16",
