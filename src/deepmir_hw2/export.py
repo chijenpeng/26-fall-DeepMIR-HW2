@@ -17,6 +17,7 @@ def export(args: argparse.Namespace) -> None:
         "config",
         "tokenizer_tokens",
         "tokenizer_config",
+        "source_programs",
         "data_fingerprint",
         "step",
     ]

@@ -1,67 +1,69 @@
-"""Use MusDr for basic metrics and the unmodified TA script for bonus metrics."""
+"""Evaluate with unmodified TA metric functions and report every missing metric."""
 
-import argparse
 import hashlib
 import importlib.util
-import itertools
+import random
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
-from .tokens import MusicTokenizer
 from .utils import read_json, write_json
 
 
-def load_module(path: Path):
+def load_module(path):
+    path = Path(path)
     if not path.is_file():
-        raise FileNotFoundError(f"Missing evaluation source: {path}; see README setup instructions")
+        raise FileNotFoundError(f"Missing evaluation source: {path}; see README")
     spec = importlib.util.spec_from_file_location("evaluation_source", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def compute_basic(sequence: list[int], tokenizer: MusicTokenizer, musdr) -> dict:
-    markers = [i for i, token in enumerate(sequence) if token == tokenizer.bar_id]
-    if len(markers) < 4:
-        raise ValueError("H4 requires at least four bars")
-    bars = [sequence[a:b] for a, b in zip(markers, [*markers[1:], len(sequence)], strict=True)]
-    for bar in bars:
-        tokenizer.validate_bar(bar, beats=4)
-    pitch = tokenizer.groups["Pitch"]
-    result = {}
-    for window in [1, 4]:
-        entropies = []
-        for i in range(len(bars) - window + 1):
-            hist = musdr.get_pitch_histogram(
-                [t for bar in bars[i : i + window] for t in bar], pitch
-            )
-            if hist is not None:
-                entropies.append(musdr.compute_histogram_entropy(hist))
-        if not entropies:
-            raise ValueError("Cannot evaluate a piece without notes")
-        result[f"H{window}"] = float(np.mean(entropies))
-    # The vocabulary supports 16-beat bars. A 4-beat bar's onset vector must
-    # contain only its 4*resolution positions, otherwise GS is artificially inflated.
-    positions = tokenizer.groups["Pos"][: 4 * tokenizer.config.positions_per_beat]
-    similarities = [
-        1 - musdr.get_onset_xor_distance(a, b, tokenizer.bar_id, positions, pitch)
-        for a, b in itertools.combinations(bars, 2)
+def load_ta_basic(ta_scripts, musdr_root):
+    root = Path(musdr_root).resolve()
+    if root.name != "MusDr":
+        raise ValueError("TA imports require a checkout directory named MusDr")
+    sys.path.insert(0, str(root.parent))
+    try:
+        return load_module(Path(ta_scripts) / "eval_basic.py")
+    finally:
+        sys.path.pop(0)
+
+
+def compute_basic(sequence, vocabulary, ta):
+    if not sequence or sequence.count(vocabulary["Bar"]) < 1:
+        raise ValueError("Expected a nonempty bar sequence")
+    positions = [
+        vocabulary[key]
+        for key in sorted(
+            (key for key in vocabulary if key.startswith("Pos_")), key=lambda key: int(key[4:])
+        )
     ]
-    result["GS"] = float(np.mean(similarities))
-    result["bars"] = len(bars)
-    result["empty_bars"] = sum(len(bar) == 2 for bar in bars)
-    return result
+    pitches = [
+        vocabulary[key]
+        for key in sorted(
+            (key for key in vocabulary if key.startswith("Pitch_")), key=lambda key: int(key[6:])
+        )
+    ]
+    bar = vocabulary["Bar"]
+    return {
+        "H1": float(ta.compute_piece_pitch_entropy(sequence, 1, bar, pitches)),
+        "H4": float(ta.compute_piece_pitch_entropy(sequence, 4, bar, pitches)),
+        "GS": float(ta.compute_piece_groove_similarity(sequence, bar, positions, pitches)),
+        "bars": sequence.count(bar),
+    }
 
 
-def evaluate(args: argparse.Namespace) -> None:
+def evaluate(args):
     import pandas as pd
 
     output = Path(args.output)
     if output.exists() or output.with_suffix(".summary.json").exists():
-        raise FileExistsError(f"Evaluation output already exists: {output}")
+        raise FileExistsError(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     if args.task == "bonus":
         if not args.prompts:
@@ -70,19 +72,15 @@ def evaluate(args: argparse.Namespace) -> None:
         files = sorted(p.stem for p in Path(args.input).glob("*.mid"))
         if names != files:
             raise ValueError(f"Generated/expected prompt names disagree: {files} vs {names}")
-        # Validate every result first; the TA CLI otherwise skips failures and can
-        # report misleading averages over only a subset of the ten songs.
         implementation = Path(args.ta_scripts) / "eval_bonus.py"
         ta = load_module(implementation)
-        from types import SimpleNamespace
-
         options = SimpleNamespace(prompt_dir=args.prompts, gen_midi_dir=args.input)
         for name in names:
             ta.evaluate_song(name, options)
         subprocess.run(
             [
                 sys.executable,
-                str(Path(args.ta_scripts) / "eval_bonus.py"),
+                str(implementation),
                 "--prompt_dir",
                 args.prompts,
                 "--gen_midi_dir",
@@ -94,43 +92,66 @@ def evaluate(args: argparse.Namespace) -> None:
         )
         frame = pd.read_csv(output)
         if len(frame) != len(names):
-            raise ValueError("TA evaluation skipped songs unexpectedly")
-        metrics = [c for c in frame if c not in {"song_name", "n_bars"}]
-        summary = {c: float(np.average(frame[c], weights=frame["n_bars"])) for c in metrics}
+            raise ValueError("TA evaluation unexpectedly skipped songs")
+        metrics = [key for key in frame if key not in {"song_name", "n_bars"}]
+        means = {key: float(np.average(frame[key], weights=frame["n_bars"])) for key in metrics}
     else:
         directory = Path(args.input)
-        tokenizer = MusicTokenizer.load(directory / "tokenizer.json")
+        vocabulary = read_json(directory / "tok2idx.json")
         sequences = read_json(directory / "sequences.json")
         if not sequences:
             raise ValueError("No sequences to evaluate")
-        implementation = Path(args.musdr_root) / "musdr/side_utils.py"
-        musdr = load_module(implementation)
-        rows = []
-        for item in sequences:
-            ids = [tokenizer.tok2idx[token] for token in item["tokens"]]
-            rows.append({"song_name": item["song_name"], **compute_basic(ids, tokenizer, musdr)})
+        if (directory / "generation.json").exists():
+            generation = read_json(directory / "generation.json")
+            if not generation["complete"] or len(sequences) != generation["expected_pieces"]:
+                raise ValueError("Generation is incomplete; refusing a partial-piece average")
+        implementation = Path(args.ta_scripts) / "eval_basic.py"
+        ta = load_ta_basic(args.ta_scripts, args.musdr_root)
+        state = random.getstate()
+        random.seed(args.seed)
+        try:
+            rows = [
+                {
+                    "song_name": item["song_name"],
+                    **compute_basic(
+                        [vocabulary[token] for token in item["tokens"]], vocabulary, ta
+                    ),
+                }
+                for item in sequences
+            ]
+        finally:
+            random.setstate(state)
         frame = pd.DataFrame(rows)
         frame.to_csv(output, index=False)
-        summary = {metric: float(frame[metric].mean()) for metric in ["H1", "H4", "GS"]}
-    if not all(np.isfinite(value) for value in summary.values()):
-        raise ValueError("Evaluation produced non-finite metrics")
-    write_json(
-        output.with_suffix(".summary.json"),
-        {
-            "pieces": len(frame),
-            "metrics": summary,
-            "implementation_sha256": hashlib.sha256(implementation.read_bytes()).hexdigest(),
-        },
-    )
+        metrics = ["H1", "H4", "GS"]
+        means = {key: float(frame[key].mean()) for key in metrics}
+    # Preserve TA behavior (including NaN for all-rest pitch windows), while
+    # explicitly reporting coverage instead of concealing failed/undefined metrics.
+    summary = {
+        "pieces": len(frame),
+        "metrics": {key: value if np.isfinite(value) else None for key, value in means.items()},
+        "valid_pieces": {key: int(np.isfinite(frame[key]).sum()) for key in metrics},
+        "implementation_sha256": hashlib.sha256(implementation.read_bytes()).hexdigest(),
+        "seed": args.seed,
+    }
+    summary["complete"] = all(count == len(frame) for count in summary["valid_pieces"].values())
+    if args.task == "basic":
+        summary["musdr_sha256"] = hashlib.sha256(
+            (Path(args.musdr_root) / "musdr/side_utils.py").read_bytes()
+        ).hexdigest()
+    write_json(output.with_suffix(".summary.json"), summary)
     print(summary)
+    if not summary["complete"]:
+        raise ValueError("Undefined metrics remain; refusing to report a complete experiment")
 
 
-def add_parser(subparsers) -> None:
+def add_parser(subparsers):
     parser = subparsers.add_parser("evaluate", help=__doc__)
     parser.add_argument("--task", choices=["basic", "bonus"], required=True)
-    parser.add_argument("--input", required=True, help="Generation directory")
-    parser.add_argument("--output", required=True, help="Output CSV")
-    parser.add_argument("--prompts", help="POP909/prompts/bonus")
+    parser.add_argument("--input", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--prompts")
     parser.add_argument("--musdr-root", default="third_party/MusDr")
     parser.add_argument("--ta-scripts", default="HW2_scripts")
+    parser.add_argument("--seed", type=int, default=2026)
     parser.set_defaults(func=evaluate)

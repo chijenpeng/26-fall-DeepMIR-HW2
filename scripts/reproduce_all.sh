@@ -46,7 +46,7 @@ SETTINGS
       --output "$hw2_output/bonus"
     ;;
   evaluate)
-    hw2_command reference --data "$hw2_data" --count 100 --bars 32 --output "$hw2_output/real"
+    hw2_command reference --data "$hw2_data" --output "$hw2_output/real"
     hw2_command evaluate --task basic --input "$hw2_output/real" \
       --output "$hw2_output/metrics/real.csv"
     for setting in A B C; do

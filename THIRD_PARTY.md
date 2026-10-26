@@ -15,7 +15,8 @@
   Cite Wu and Yang, *The Jazz Transformer on the Front Line*, ISMIR 2020.
 - The representation follows REMI-style event sequences; cite Huang and Yang,
   *Pop Music Transformer*, ACM Multimedia 2020. The explicit annotated bar-length
-  tokens and tempo-normalized codec are this project's implementation choices.
+  event representation preserves supplied pulse timing and MIDI event values.
+  The separate evaluation view follows the TA tokenizer's 16-position-per-beat grid.
 - No SoundFont has been chosen or bundled. Any future SoundFont must retain its
   own attribution/license and is used for audio rendering only.
 

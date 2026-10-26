@@ -1,6 +1,5 @@
-"""Select reproducible 32-bar real-data windows for matched basic evaluation."""
+"""Export the full provided training set as the default real-data baseline."""
 
-import argparse
 import random
 from pathlib import Path
 
@@ -8,64 +7,73 @@ from .data import MusicCorpus
 from .utils import write_json
 
 
-def reference(args: argparse.Namespace) -> None:
+def reference(args):
     corpus = MusicCorpus(args.data)
-    tokenizer = corpus.tokenizer
     output = Path(args.output)
     if output.exists() and any(output.iterdir()):
-        raise FileExistsError(f"Use an empty reference directory: {output}")
-    if args.count < 1 or args.bars < 4:
-        raise ValueError("Need count >= 1 and bars >= 4")
+        raise FileExistsError(output)
+    if args.count is not None and args.count < 1:
+        raise ValueError("count must be positive")
+    if args.bars is not None and args.bars < 1:
+        raise ValueError("bars must be positive")
     names = sorted(corpus.songs)
     rng = random.Random(args.seed)
-    rng.shuffle(names)
-    records = []
+    if args.count is not None:
+        rng.shuffle(names)
+    records, skipped = [], []
     for name in names:
         song = corpus.songs[name]
         offsets = song["basic_offsets"]
-        eligible = [
-            i
-            for i in range(len(offsets) - args.bars)
-            if all(
-                tokenizer.value(int(song["basic"][offsets[b] + 1])) == 4
-                for b in range(i, i + args.bars)
-            )
-        ]
-        if not eligible:
+        total = len(offsets) - 1
+        if args.bars is not None and total < args.bars:
+            skipped.append(name)
             continue
-        start = rng.choice(eligible)
-        ids = song["basic"][offsets[start] : offsets[start + args.bars]]
+        count = args.bars if args.bars is not None else total
+        start = rng.randrange(total - count + 1) if args.bars is not None else 0
+        bars = [
+            song["basic"][offsets[b] : offsets[b + 1]].astype(int).tolist()
+            for b in range(start, start + count)
+        ]
         records.append(
             {
                 "song_name": name,
                 "start_bar": start,
-                "tokens": [tokenizer.tokens[int(token)] for token in ids],
+                "bars": count,
+                "tokens": corpus.tokenizer.evaluation_tokens(bars),
             }
         )
-        if len(records) == args.count:
+        if args.count is not None and len(records) == args.count:
             break
-    if len(records) < args.count:
-        raise ValueError("Not enough distinct songs with full 4-beat reference windows")
+    if not records or (args.count is not None and len(records) != args.count):
+        raise ValueError("Not enough songs for the explicitly requested subset")
     output.mkdir(parents=True, exist_ok=True)
-    tokenizer.save(output / "tokenizer.json")
-    write_json(output / "tok2idx.json", tokenizer.tok2idx)
+    corpus.tokenizer.save(output / "tokenizer.json")
+    write_json(output / "tok2idx.json", corpus.tokenizer.evaluation_vocabulary())
     write_json(output / "sequences.json", records)
     write_json(
         output / "reference.json",
         {
+            "source_songs": len(corpus.songs),
+            "evaluated_songs": len(records),
+            "subset_requested": args.count is not None or args.bars is not None,
+            "requested_bars": args.bars,
+            "requested_count": args.count,
+            "skipped_short_songs": skipped,
             "seed": args.seed,
-            "bars": args.bars,
-            "count": args.count,
             "data_fingerprint": corpus.manifest["fingerprint"],
         },
     )
 
 
-def add_parser(subparsers) -> None:
+def add_parser(subparsers):
     parser = subparsers.add_parser("reference", help=__doc__)
     parser.add_argument("--data", default="data/prepared")
     parser.add_argument("--output", required=True)
-    parser.add_argument("--count", type=int, default=100)
-    parser.add_argument("--bars", type=int, default=32)
+    parser.add_argument(
+        "--count", type=int, help="Optional explicit song subset; default all songs"
+    )
+    parser.add_argument(
+        "--bars", type=int, help="Optional crop length; default complete supplied songs"
+    )
     parser.add_argument("--seed", type=int, default=2026)
     parser.set_defaults(func=reference)

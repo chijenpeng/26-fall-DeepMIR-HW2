@@ -12,15 +12,23 @@ import numpy as np
 from .utils import write_json
 
 
-def render(args: argparse.Namespace) -> None:
-    executable = shutil.which(args.fluidsynth)
+def validate_render_settings(soundfont, fluidsynth="fluidsynth", sample_rate=44100):
+    executable = shutil.which(fluidsynth)
     if executable is None:
         raise FileNotFoundError("FluidSynth executable is missing; pass --fluidsynth PATH")
-    soundfont, source, output = Path(args.soundfont), Path(args.input), Path(args.output)
+    soundfont = Path(soundfont)
     if not soundfont.is_file():
         raise FileNotFoundError(soundfont)
-    if args.sample_rate < 8000:
+    if sample_rate < 8000:
         raise ValueError("sample_rate must be at least 8000 Hz")
+    return executable, soundfont
+
+
+def render(args: argparse.Namespace) -> None:
+    executable, soundfont = validate_render_settings(
+        args.soundfont, args.fluidsynth, args.sample_rate
+    )
+    source, output = Path(args.input), Path(args.output)
     midis = sorted(source.glob("*.mid")) + sorted(source.glob("*.midi"))
     if not midis:
         raise ValueError("No MIDI files found")

@@ -9,7 +9,7 @@
   },
   "data": {
     "bars": 1,
-    "max_tokens": 1024,
+    "max_tokens": "auto",
     "validation_fraction": 0.05,
     "transpose": 0
   },
