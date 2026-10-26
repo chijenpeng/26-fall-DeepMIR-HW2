@@ -41,8 +41,8 @@ jobs:
           git -C third_party/MusDr checkout b034cf86550963cf2021299eafb1001d0fe34853
       - name: Lint and formatting
         run: |
-          ruff check src tests
-          ruff format --check src tests
+          ruff check src tests scripts/benchmark_gpu.py
+          ruff format --check src tests scripts/benchmark_gpu.py
           for script in scripts/*.sh; do bash -n "$script"; done
       - name: Unit and synthetic integration tests
         run: pytest -q

@@ -1,16 +1,17 @@
 # Assignment coverage audit
 
 Source: supplied Homework_2.pdf (38 pages), not redistributed here.
-Deadline: 2026-10-29 23:59 Asia/Taipei. Formal preprocessing/training/experiments are paused.
+Deadline: 2026-10-29 23:59 Asia/Taipei. Formal work resumed on 2026-10-26.
 
-Old prepared data, smoke checkpoints and outputs were deleted. Verification below
-refers to current synthetic tests, not old artifacts or completed POP909 experiments.
+Old-format prepared data, smoke checkpoints and outputs were deleted. Current
+preparation passed on all 896 songs on both servers with identical fingerprints.
+Development training is active; final experiments/artifacts remain pending.
 
 | Requirement | Implementation | Remaining |
 |---|---|---|
 | Transformer from scratch | Random GPT-2/T5 | Formal training |
-| Only provided training data | Exact-896 default guard, source-derived schemas, no prompt targets; all 896 sources audited | New preparation/all-song final stage |
-| Basic: merge three tracks | Merged note/CC events plus supplied basic chords | Full-source validation |
+| Only provided training data | Exact-896 default guard, source-derived schemas, no prompt targets; all 896 sources prepared | All-song final stage |
+| Basic: merge three tracks | Merged note/CC events plus supplied basic chords; all sources prepared | Final-output validation |
 | Basic A: 32 bars | Model predicts timing/meter; task controls count | Final model/samples |
 | Basic A: three settings, 20 pieces each | A/B/C commands | Run all 60 |
 | Basic A: H4/GS | Original TA functions and shared projection | Formal comparison |
@@ -46,10 +47,11 @@ refers to current synthetic tests, not old artifacts or completed POP909 experim
 - No four-beat-only/100-song default reference subset.
 - Obsolete files deleted; no legacy migration or inference implementation.
 
-These are code changes with synthetic verification. Training, full experiments,
-audio, report and delivery must still be completed.
+Code has synthetic verification plus real-source preparation and GPU capacity
+checks. Development training is in progress. Full experiments, audio, report and
+delivery must still be completed; see experiments.md for the run record.
 
-## Pre-merge specification review
+## Pre-merge specification review (before training resumed)
 
 Checked against the complete supplied PDF: required Transformer/from-scratch/data
 rules; basic merged tracks, three configurations and 20 x 32-bar outputs per setting;
@@ -65,4 +67,4 @@ generation ran. MIDI/WAV orchestration and PCM validation have synthetic regress
 
 No known code-side specification blocker remains after these corrections. This review
 does not certify final model quality, GPU capacity, completed experiments or submission
-artifacts; those remain explicitly pending while runs are paused.
+artifacts. Subsequent preparation/capacity checks are recorded separately in experiments.md.

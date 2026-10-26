@@ -1,7 +1,7 @@
 # Module guide
 
-Formal preprocessing/training/experiments are paused. Obsolete prepared data, smoke
-checkpoints and sample outputs were deleted locally and on both training servers.
+Formal work resumed on 2026-10-26. Current data preparation and GPU capacity checks
+are recorded in experiments.md. Final artifacts remain pending.
 
 ## Task boundary
 
@@ -20,6 +20,7 @@ Paths are relative to src/deepmir_hw2/.
 | prepare.py | Source-derived schema; aligned basic/melody/piano arrays; MIDI/beat/chord hashes |
 | data.py | Song split, complete windows, joint chord/note transposition, padding and context requirement |
 | models.py | Random GPT-2/T5, no pretrained weights |
+| attention.py | Exact T5 attention in query blocks; bounded saved intermediates, shared relative bias, full-history cache |
 | train.py | Weighted loss, AdamW/AMP/accumulation, sampled validation, atomic checkpoints/resume; reject insufficient context |
 | generate.py | Full-history cache; learned basic timing; supplied Bonus timing; optional MIDI/WAV listening output in one command |
 | reference.py | All-song/all-meter default reference; explicit optional subsets |
@@ -43,7 +44,7 @@ timing within one output tick and align the annotated bar boundaries. Release ta
 can continue beyond the final onset bar.
 
 If annotations end before the final source onset, preparation extends the last supplied
-bar width/beat interval to close that bar. This tail convention needs full-data checking.
+bar width/beat interval to close that bar. Full preparation passed on all 896 songs.
 
 ## Capacity and verification limits
 
@@ -51,9 +52,17 @@ Layers, widths, heads, optimizer and development split remain the original candi
 Context is derived from the longest complete configured window. Insufficient capacity
 fails; neither training nor generation silently shortens music or discards history.
 
-Old vocabulary/memory measurements no longer apply. Revised full-data preprocessing,
-GPU benchmarks, complete experiments, WAV synthesis and report are pending. Current
-evidence includes synthetic CPU testing and read-only validation of all 896 training
-sources plus codec checks for all 13 supplied prompts. No new prepared dataset was
-created. The audit fixed terminal-downbeat notes and added same-tick MIDI note-release
-ordering, exact source-count enforcement and integrated listening-sample rendering.
+Prepared vocabulary has 1,195 tokens. Required context is 25,451 for basic and 13,403
+for bonus. Basic passed the longest-window optimizer check on a 12GB RTX 4070 SUPER.
+Native T5 exceeded 20GB on the most expensive 16-bar window; query blocking and
+recomputation lets all three extrema (largest encoder, largest decoder, largest
+combined workload) pass below 4.7GB allocated with 2,048-query blocks. Compact
+integer bucket matrices are shared across layers; attention scores and learned
+bias values are materialized by query block. This is full, quadratic attention,
+with no sliding window or context truncation.
+CPU regressions compare all parameter gradients to native T5 and cached logits to
+full-history decoding, including sequences longer than the query block size.
+
+Complete experiments, WAV synthesis and report remain pending. Source-data audits
+and all 13 supplied prompt encodings passed before preparation. Training capacity
+checks are distinct from final music-quality evaluation.

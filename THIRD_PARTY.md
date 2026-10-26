@@ -9,6 +9,10 @@
 - GPT-2 and T5 architectures are implemented by Hugging Face Transformers:
   https://github.com/huggingface/transformers (Apache-2.0). This project uses version
   4.57.1 and constructs both models with random weights.
+  `attention.py` adapts T5 projection/cache handling from
+  `src/transformers/models/t5/modeling_t5.py` in that version, retaining its Apache
+  notice. Query-block recomputation and lazy relative bias are project modifications;
+  they preserve full attention rather than introducing a sliding window.
 - MusDr provides the original entropy and onset-distance helpers:
   https://github.com/slSeanWU/MusDr (MIT), pinned commit
   `b034cf86550963cf2021299eafb1001d0fe34853`. It is fetched separately, not vendored.
