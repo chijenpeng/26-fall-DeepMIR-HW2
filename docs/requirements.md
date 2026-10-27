@@ -5,7 +5,8 @@ Deadline: 2026-10-29 23:59 Asia/Taipei. Formal work resumed on 2026-10-26.
 
 Old-format prepared data, smoke checkpoints and outputs were deleted. Current
 preparation passed on all 896 songs on both servers with identical fingerprints.
-Development training is active; final experiments/artifacts remain pending.
+Bonus development training is active. Both basic runs stopped after overfitting;
+four development MIDI/WAV samples were produced. Final experiments/artifacts remain pending.
 
 | Requirement | Implementation | Remaining |
 |---|---|---|
@@ -17,7 +18,7 @@ Development training is active; final experiments/artifacts remain pending.
 | Basic A: H4/GS | Original TA functions and shared projection | Formal comparison |
 | Real data | All supplied songs/meters by default | Full reference |
 | H1/SI | H1 supported; SI optional/unimplemented | Optional SI decision |
-| Basic A: selected 20 MIDI/WAV | Integrated generate --soundfont, or separate render | Selection/real-SoundFont validation |
+| Basic A: selected 20 MIDI/WAV | Integrated generate --soundfont, or separate render; real SoundFont works on development samples | Final selection/all 20 |
 | Basic B: same checkpoint, 8+24 bars | Same model, 24 default, verify 8-bar input | Full three-prompt comparison |
 | Basic B: nine MIDI/WAV, best per prompt | Reproduction commands | Generate/listen/select |
 | Correct MIDI bars and preserved prompt sound | Clock/retrigger/terminal-note regressions pass; all 13 real prompt encodings checked | Final-model output validation |
@@ -29,7 +30,7 @@ Development training is active; final experiments/artifacts remain pending.
 | Optional bonus ablations | Config/checkpoint infrastructure | Optional experiments |
 | 16:9 report | Not authored | r14725022_report.pdf |
 | Code/README/requirements/weights | Package, pins, export | Final weights/clean-checkout validation |
-| Output path/listening inference | Explicit paths, generate --soundfont writes MIDI/WAV; atomic PCM validation; render failure marks batch incomplete | Real SoundFont validation |
+| Output path/listening inference | Explicit paths, integrated/separate MIDI/WAV; four development samples rendered; adaptive MIDI clock fits TA reader limits | Final checkpoint generation stability |
 | Cloud link in report/COOL | Not prepared | Final upload/sharing |
 | Exclude data/caches/models | Ignore rules and old artifact deletion | Final submission audit |
 | Cite public code | README/THIRD_PARTY.md | Report citations |

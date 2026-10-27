@@ -11,6 +11,7 @@ from pathlib import Path
 
 import mido
 import numpy as np
+from pretty_midi.pretty_midi import MAX_TICK
 
 
 @dataclass(frozen=True)
@@ -133,19 +134,7 @@ def combine_with_prompt(original, generated, name):
     return instruments
 
 
-def write_midi(path, instruments, timings, origin_us=0):
-    """Rebuild the MIDI clock without moving notes/controllers in physical seconds.
-
-    Annotated pulses need not be quarter notes. For example, six supplied pulses
-    in a supplied 4/4 bar occupy four quarters. Both supplied information sources
-    are retained; no invented 6/4 signature or fixed playback BPM is required.
-    """
-    if not timings or origin_us < 0:
-        raise ValueError("Need at least one bar and a nonnegative origin")
-    divisor = math.lcm(*(t.quarters_per_pulse.denominator for t in timings))
-    ppq = (32767 // divisor) * divisor
-    if ppq == 0:
-        raise ValueError("Pulse/meter mapping exceeds SMF tick resolution")
+def _build_midi(instruments, timings, origin_us, ppq):
     initial_tempo = round(timings[0].beat_us[0] / timings[0].quarters_per_pulse)
     if not 1 <= initial_tempo <= 0xFFFFFF:
         raise ValueError("Pulse timing cannot be represented by SMF tempo")
@@ -194,8 +183,6 @@ def write_midi(path, instruments, timings, origin_us=0):
 
         for absolute, message in sorted(events, key=event_order):
             delta = absolute - previous
-            if delta > 0x0FFFFFFF:
-                raise ValueError("Event gap exceeds standard MIDI delta-time capacity")
             track.append(message.copy(time=delta))
             previous = absolute
         track.append(mido.MetaMessage("end_of_track"))
@@ -244,6 +231,30 @@ def write_midi(path, instruments, timings, origin_us=0):
                 )
             )
         output.tracks.append(make_track(events))
+    return output
+
+
+def write_midi(path, instruments, timings, origin_us=0):
+    """Preserve event seconds and supplied meter in a reader-compatible MIDI clock.
+
+    Pulses need not be quarters: six pulses in a supplied 4/4 bar occupy four
+    quarters. Use the finest SMF resolution that also fits PrettyMIDI's tick
+    allocation limit, including full release tails. No musical events are clipped.
+    """
+    if not timings or origin_us < 0:
+        raise ValueError("Need at least one bar and a nonnegative origin")
+    divisor = math.lcm(*(t.quarters_per_pulse.denominator for t in timings))
+    ppq = (32767 // divisor) * divisor
+    while ppq:
+        output = _build_midi(instruments, timings, origin_us, ppq)
+        largest_tick = max(sum(message.time for message in track) for track in output.tracks)
+        if largest_tick + 1 <= MAX_TICK:
+            break
+        # Retain exact pulse-to-quarter ratios while lowering serialization
+        # resolution. The model's event times and generated bar count are unchanged.
+        ppq = (ppq * (int(MAX_TICK) - 2) // (largest_tick + 1) // divisor) * divisor
+    else:
+        raise ValueError("MIDI timing cannot fit reader limits at an exact pulse resolution")
     path = Path(path)
     fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".mid.tmp")
     try:
