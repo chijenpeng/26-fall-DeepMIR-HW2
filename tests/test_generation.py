@@ -118,7 +118,7 @@ def test_silence_nonfour_meter_and_duplicate_dense_onsets_are_not_forbidden(task
     ]
     dense += event * 130
     expected = [empty, dense]
-    script = [tokenizer.bos_id, *empty, *dense, tokenizer.bar_id]
+    script = [tokenizer.bos_id, *empty, *dense, tokenizer.eos_id]
     model = ScriptModel(script, len(tokenizer))
     output, _ = generate_bars(
         model,
@@ -163,7 +163,7 @@ def test_trace_reconstructs_complete_generated_note_bar(tmp_path):
         tokenizer.tok2idx["Duration"],
         *tokenizer.encode_uint(30_000_000),
     ]
-    model = ScriptModel([tokenizer.bos_id, *expected, tokenizer.bar_id], len(tokenizer))
+    model = ScriptModel([tokenizer.bos_id, *expected, tokenizer.eos_id], len(tokenizer))
     sidecar = RawBarSidecar(tmp_path / "song.bars.json", "song", "beam")
     bars, _ = generate_bars(
         model,
@@ -193,14 +193,30 @@ def test_beam_strategy_metadata_pins_width_four():
     assert sampling_metadata(SamplingConfig(numeric_strategy="beam"))["beam_width"] == 4
 
 
-def test_final_eos_completes_last_bar_but_is_forbidden_on_earlier_bars(tmp_path):
+def test_bar_is_forbidden_at_final_gate_and_eos_is_forbidden_earlier(monkeypatch, tmp_path):
     tokenizer = MusicTokenizer()
     header = tokenizer.header(BarTiming((500_000,) * 4, 4, 4))
     script = [tokenizer.bos_id, *header, *header, tokenizer.eos_id]
     gate_positions = [1 + len(header), 1 + 2 * len(header)]
-    gate_logits = {gate_positions[0]: (3.0, 2.0, 10.0), gate_positions[1]: (2.0, 3.0, 10.0)}
+    # EOS dominates the first gate but is forbidden there. At the final gate,
+    # Bar is the model's top choice; it must be excluded so EOS ends the piece.
+    gate_logits = {gate_positions[0]: (3.0, 2.0, 10.0), gate_positions[1]: (100.0, 3.0, 10.0)}
     model = FinalEosGateModel(script, len(tokenizer), gate_logits, tokenizer)
     sidecar = RawBarSidecar(tmp_path / "piece.bars.json", "piece", "sample")
+    from deepmir_hw2 import generate as generation
+
+    original_sample_token = generation.sample_token
+    gate_choices = []
+
+    def record_gate_choice(logits, allowed, sampling, rng):
+        gate_tokens = {tokenizer.bar_id, tokenizer.tok2idx["Pos"], tokenizer.eos_id}
+        if set(allowed).issubset(gate_tokens):
+            selected = original_sample_token(logits, allowed, sampling, rng)
+            gate_choices.append((list(allowed), selected))
+            return selected
+        return original_sample_token(logits, allowed, sampling, rng)
+
+    monkeypatch.setattr(generation, "sample_token", record_gate_choice)
     bars, diagnostic = generate_bars(
         model,
         tokenizer,
@@ -219,6 +235,10 @@ def test_final_eos_completes_last_bar_but_is_forbidden_on_earlier_bars(tmp_path)
     assert all(row["complete"] for row in raw_bars["bars"])
     assert raw_bars["beam_width"] is None
     assert tokenizer.eos_id not in [token for bar in bars for token in bar]
+    assert gate_choices == [
+        ([tokenizer.tok2idx["Pos"], tokenizer.bar_id], tokenizer.bar_id),
+        ([tokenizer.tok2idx["Pos"], tokenizer.eos_id], tokenizer.eos_id),
+    ]
 
 
 def test_integer_beam_selects_complete_integer_with_best_joint_probability():

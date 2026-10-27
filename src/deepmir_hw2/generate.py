@@ -357,11 +357,13 @@ def generate_bars(
                 timing = BarTiming(durations, int(n), int(d))
             previous = 0
             while True:
-                gate_choices = [tokenizer.bar_id, tokenizer.tok2idx["Pos"]]
+                gate_choices = [tokenizer.tok2idx["Pos"]]
                 if index == bar_count - 1:
                     gate_choices.append(tokenizer.eos_id)
+                else:
+                    gate_choices.append(tokenizer.bar_id)
                 gate = sample_token(engine.logits(), gate_choices, sampling, rng)
-                if gate in (tokenizer.bar_id, tokenizer.eos_id):
+                if gate != tokenizer.tok2idx["Pos"]:
                     break
                 engine.append([gate])
                 bar.append(gate)

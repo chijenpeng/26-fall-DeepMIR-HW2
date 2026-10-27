@@ -551,7 +551,6 @@ def audit_root(root: Path, selected_setting: str) -> dict:
         root / "models/bonus.pt",
         root / "README.md",
         root / "requirements.txt",
-        root / "r14725022_report.pdf",
     ]
     for path in required_files:
         audit.check(f"required file: {path.relative_to(root)}", path.is_file(), str(path))
@@ -563,7 +562,8 @@ def audit_root(root: Path, selected_setting: str) -> dict:
     )
     audit.note(
         "Report and sharing",
-        "Review report content, citations and 16:9 layout; verify cloud link and LMS package.",
+        "Student-owned: write and review the report, share code/models/results with open access, "
+        "and submit the cloud link through NTU COOL.",
     )
     return {
         "root": str(root),
