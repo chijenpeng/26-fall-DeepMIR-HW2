@@ -33,7 +33,7 @@ code changes and synthetic tests do not close it without real model probes.
 | Bonus: CA and OA | Original TA evaluator, completeness checks | Final 10-piece CA, pitch OA, velocity OA, duration OA and IOI OA |
 | Model/representation/config details | Codec, configs/provenance | Report |
 | Optional bonus ablations | Config/checkpoint infrastructure | Optional experiments |
-| 16:9 report | Not authored | r14725022_report.pdf |
+| 16:9 report | Student-authored deliverable; intentionally not required by the local artifact audit | Write and review r14725022_report.pdf, including layout and citations |
 | Code/README/requirements/weights | Package, pins, export | Final weights/clean-checkout validation |
 | Output path/listening inference | Explicit paths, integrated/separate MIDI/WAV; four development samples rendered; adaptive MIDI clock fits TA reader limits | Final checkpoint generation stability |
 | Cloud link in report/COOL | Not prepared | Final upload/sharing |
@@ -57,8 +57,9 @@ Synthetic tests and input preparation do not certify final generation. See
 experiments.md for historical development evidence and current launch state.
 Run `deepmir audit --root . --selected-setting B --output outputs/audit.json` after
 generation and evaluation. The audit checks the fixed `reproduce_all.sh` output
-layout and checkpoint links. Listening quality, per-prompt Basic B selection,
-report content/layout, cloud access and LMS packaging remain manual review items.
+layout and checkpoint links. Listening quality and per-prompt Basic B selection
+remain manual review items. The student writes and reviews the report, uploads code,
+models and results with open access, and submits the cloud link through NTU COOL.
 
 ## Pre-merge specification review (before training resumed)
 
