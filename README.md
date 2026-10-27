@@ -2,11 +2,16 @@
 
 Chi-Jen Peng (R14725022)
 
-**Status:** formal work resumed on 2026-10-26. All 896 songs were prepared on both
-servers with matching fingerprints. The two basic development runs were stopped
-after validation overfitting; their best checkpoints produced development listening
-samples. Bonus training continues. See [run record](docs/experiments.md) for measured
-capacity, commands and limitations. Final all-song models and the report remain pending.
+**Status (2026-10-27):** both formal final runs have been launched from reviewed
+commit `63c4a55ba2962c95674eccbf687eec20c431279c`, from random initialization over
+all 896 songs with no validation split. Basic runs on emma GPU 0 (9,000 steps,
+learning rate 2e-4); Bonus Option B runs on emma GPU 1 (12,000 steps, learning rate
+3e-4). Completion, per-song exposure checks, final generation, evaluations, listening
+selection, report, and delivery remain pending. Final-bar EOS/numeric generation
+behavior remains under diagnosis; synthetic tests have not resolved it. The earlier
+851/45 development runs and their samples are diagnostics only. See the
+[run record](docs/experiments.md)
+for historical evidence, launch details, and final-stage checks.
 
 See [module guide](docs/architecture.md), [assignment checklist](docs/requirements.md)
 and [source attribution](THIRD_PARTY.md).
@@ -69,7 +74,7 @@ deepmir generate --checkpoint models/bonus.pt --mode accompany \
 
 This generates MIDI and WAV together. Renderer requirements are checked before
 model inference. A WAV failure leaves the batch explicitly incomplete; it cannot
-be averaged or submitted as a completed run. Exported final checkpoints are still pending.
+be averaged or submitted as a completed run. The final exported checkpoints are pending.
 
 ## Data and source preservation
 
@@ -121,11 +126,14 @@ relative position bias. The largest encoder, largest decoder and highest combine
 attention-workload windows all passed on the A4500.
 See the run record for timing/memory details; old-code smoke measurements do not apply.
 
-Basic development has a 30,000-step limit per learning-rate candidate. Bonus has a
-12,000-step limit and 500-step warmup: the measured initial 13.5 seconds/step made
-the original 30,000-step candidate exceed the Thursday deadline. This leaves time
-for all-song final training and required generation/evaluation. Convergence still
-needs validation and listening; a step limit is not a quality claim.
+The 30,000-step Basic runs and original Bonus development run used an 851/45 split.
+They are retained as development diagnostics and are never used to initialize the
+formal final models. Formal runs use the dedicated `basic-full-corpus.json` and
+`bonus-full-corpus.json` configs: all 896 source songs, no validation data, random
+initialization, and fixed final budgets of 9,000 Basic steps and 12,000 Bonus steps.
+These budgets are experiment settings, not claims of quality or completion.
+
+Historical development launch examples (the old 851/45 runs; not final training):
 
 ~~~bash
 # emma: physical GPUs 0 and 1, separate processes
@@ -140,39 +148,64 @@ Use --resume runs/basic with the original configuration to resume. Atomic checkp
 retain model/optimizer/scaler/RNG/config/source programs and corpus fingerprint.
 SIGINT/SIGTERM requests save after the current optimizer step.
 
-Development uses 851 training / 45 validation songs. The lowest sampled validation
-cross-entropy checkpoint is named best; that is not a listening-quality claim.
-A separate final stage must use all 896 songs after selecting settings:
+The former development runs used 851 training / 45 validation songs. Their best
+validation checkpoints are not final weights and must not be used as warm starts.
+The formal runs use fresh, random-initialized models directly on all 896 songs:
 
 ~~~bash
-CUDA_VISIBLE_DEVICES=0 deepmir train --config configs/basic.json \
-  --init-from runs/basic --all-training --steps FINAL_STEPS --output runs/basic-final
-CUDA_VISIBLE_DEVICES=1 deepmir train --config configs/bonus.json \
-  --init-from runs/bonus --all-training --steps FINAL_STEPS --output runs/bonus-final
+test "$(git rev-parse HEAD)" = "63c4a55ba2962c95674eccbf687eec20c431279c"
+CUDA_VISIBLE_DEVICES=0 HW2_SOURCE_COMMIT=63c4a55ba2962c95674eccbf687eec20c431279c \
+  deepmir train --config configs/basic-full-corpus.json --data data/prepared \
+  --output runs/basic-final
+CUDA_VISIBLE_DEVICES=1 HW2_SOURCE_COMMIT=63c4a55ba2962c95674eccbf687eec20c431279c \
+  deepmir train --config configs/bonus-full-corpus.json --data data/prepared \
+  --output runs/bonus-final
 ~~~
 
-Replace FINAL_STEPS with a choice based on development convergence. All-song final
-stages remain pending; the current runs use the development split.
+Do not pass `--init-from` or `--all-training` for these configs. They already declare
+`training_mode: full_corpus`, `expected_songs: 896`, and `validation_fraction: 0.0`.
+The training checkpoint records the source commit, initialization, data fingerprint,
+configured step, and exposure count for each of the 896 names. It is complete only
+after reaching the exact configured step with every source song sampled. Resume an
+interrupted final run only from its own latest checkpoint using the same config.
+Before export, check each run with:
+
+~~~bash
+python -m deepmir_hw2.experiment_stage require-final --checkpoint runs/basic-final
+python -m deepmir_hw2.experiment_stage require-final --checkpoint runs/bonus-final
+~~~
+
+This check verifies the full-corpus split, random initialization, exact configured
+step, fingerprint linkage, 896 positive per-song counts, and the expected aggregate
+exposure. Development checkpoints cannot pass as final checkpoints.
 
 ## Inference
 
 ~~~bash
 deepmir generate --checkpoint runs/basic-final --mode unconditional \
-  --count 20 --bars 32 --top-k 20 --temperature 0.9 --seed 2026 --output outputs/basic-a/A
+  --count 20 --bars 32 --top-k 20 --temperature 0.9 --numeric-strategy sample \
+  --seed 2026 --output outputs/basic-a/A
 deepmir generate --checkpoint runs/basic-final --mode unconditional \
-  --count 20 --bars 32 --top-k 50 --temperature 0.9 --seed 2026 --output outputs/basic-a/B
+  --count 20 --bars 32 --top-k 50 --temperature 0.9 --numeric-strategy sample \
+  --seed 2026 --output outputs/basic-a/B
 deepmir generate --checkpoint runs/basic-final --mode unconditional \
-  --count 20 --bars 32 --top-k 50 --temperature 1.1 --seed 2026 --output outputs/basic-a/C
+  --count 20 --bars 32 --top-k 50 --temperature 1.1 --numeric-strategy sample \
+  --seed 2026 --output outputs/basic-a/C
 
 deepmir generate --checkpoint runs/basic-final --mode continue \
   --prompts POP909/prompts/basic-b --bars 24 --top-k 20 --temperature 0.9 \
+  --numeric-strategy sample \
   --seed 2026 --output outputs/basic-b/A
 # Repeat continuation with B/C settings.
 
 deepmir generate --checkpoint runs/bonus-final --mode accompany \
-  --prompts POP909/prompts/bonus --top-k 50 --temperature 0.9 \
+  --prompts POP909/prompts/bonus --top-k 50 --temperature 0.9 --numeric-strategy sample \
   --seed 2026 --output outputs/bonus
 ~~~
+
+With `--numeric-strategy beam`, integer fields use a fixed width-4 beam scored with
+temperature-scaled logits; top-k and top-p are not applied to those fields. Other
+sampled tokens still use top-k/top-p. With `sample`, top-k/top-p also apply to integers.
 
 Unconditional/continuation timing and meter are predicted, with no fixed 100 BPM or
 four-pulse bar. Bonus uses supplied melody timing headers. Continuation defaults to
@@ -211,7 +244,9 @@ H1/H4/GS call the **unmodified TA functions**. A separate evaluation view uses t
 16-position-per-annotated-beat projection. The shared position vocabulary retains the
 TA's eight-beat range, extended only for longer supplied bars. There is no custom
 four-beat GS denominator. Both real/generated data use the same mapping. TA pair
-sampling is seeded.
+sampling is seeded. The completed all-896-song real-data baseline is H1 `2.129281970636034`,
+H4 `2.6233595885936616`, GS `0.968134640374925`. H4 and GS are required; H1 is optional.
+Final model comparisons against this reference remain pending.
 
 Bonus uses the unchanged TA evaluator with completeness checks. Undefined metrics
 such as all-rest pitch entropy remain undefined, with valid-piece counts/nulls explicitly
@@ -222,21 +257,23 @@ reported. Failed pieces are not silently removed to improve averages.
 ~~~bash
 deepmir render --input outputs/basic-a/B --output outputs/basic-a/B \
   --soundfont /absolute/path/piano.sf2
-deepmir export --checkpoint runs/basic-final --output models/basic.pt
-deepmir export --checkpoint runs/bonus-final --output models/bonus.pt
+bash scripts/reproduce_all.sh export-basic
+bash scripts/reproduce_all.sh export-bonus
 ~~~
 
 Rendering is available both through generate --soundfont and the separate render
-command. The external process/PCM/failure handling has synthetic tests; a real
-The TimGM6mb SoundFont was validated on the development samples; final listening
-selection and all required output batches remain pending.
+command. External process, PCM and failure handling have synthetic tests. TimGM6mb
+was validated on development samples; final listening selection and all required
+output batches remain pending.
 Submit 20 selected basic-A pairs, 9 continuation pairs (mark each prompt's best),
-10 bonus pairs, source/inference weights/README/requirements and the 16:9 report.
+10 bonus pairs, source code, inference checkpoints, README, requirements and the 16:9 report.
 
 The explicit stages in scripts/reproduce_all.sh do nothing without a stage argument.
-Training requires CUDA_VISIBLE_DEVICES; the final stage requires HW2_FINAL_STEPS;
-rendering requires HW2_SOUNDFONT and the selected basic setting. Commands are planned
-reproduction instructions, not completed experiments.
+Training requires CUDA_VISIBLE_DEVICES. Final training uses the fixed step counts in
+configs/basic-full-corpus.json and configs/bonus-full-corpus.json; there is no
+HW2_FINAL_STEPS variable. Rendering requires HW2_SOUNDFONT and the selected Basic A
+setting. The scripts define the reproduction commands; final output and delivery checks
+are tracked separately.
 
 ## Verification
 
@@ -253,8 +290,10 @@ all-meter reference inclusion, exact CPU resume, undefined-metric rejection and
 original TA metrics. Terminal downbeat notes and same-tick retriggers have regressions.
 
 The Bonus access test deliberately puts invalid chord/piano files beside a valid
-melody and verifies neither is consumed. Full POP909 preparation, GPU memory/performance,
-musical quality, formal experiments, WAV collection and report remain pending.
-The read-only source audit checked all 896 training songs and successfully encoded
-the three 8-bar continuation prompts and ten 16-bar melody prompts. It did not
-create prepared training arrays, checkpoints or model-generated samples.
+melody and verifies neither is consumed. Full 896-song preparation passed on both
+servers, and the formal Basic and Bonus runs were launched as recorded in
+docs/experiments.md. Final checkpoint validation, model-generated output batches,
+listening selection, report and delivery remain pending. The original read-only source
+audit checked all 896 training songs and encoded the three 8-bar continuation prompts
+and ten 16-bar melody prompts; that audit itself did not create prepared arrays or
+checkpoints.

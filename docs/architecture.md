@@ -1,7 +1,10 @@
 # Module guide
 
-Formal work resumed on 2026-10-26. Current data preparation and GPU capacity checks
-are recorded in experiments.md. Final artifacts remain pending.
+Updated 2026-10-27. Formal final training runs have launched from commit
+`63c4a55ba2962c95674eccbf687eec20c431279c` on all 896 songs, with random
+initialization and no validation split. Exact-step completion, per-song exposure
+validation, final generation, and report remain pending. Final-bar EOS/numeric
+behavior is under diagnosis and is not considered resolved by synthetic tests.
 
 ## Task boundary
 
@@ -21,12 +24,14 @@ Paths are relative to src/deepmir_hw2/.
 | data.py | Song split, complete windows, joint chord/note transposition, padding and context requirement |
 | models.py | Random GPT-2/T5, no pretrained weights |
 | attention.py | Exact T5 attention in query blocks; bounded saved intermediates, shared relative bias, full-history cache |
-| train.py | Weighted loss, AdamW/AMP/accumulation, sampled validation, atomic checkpoints/resume; reject insufficient context |
+| train.py | Weighted loss, AdamW/AMP/accumulation, atomic checkpoints/resume, source-level exposure provenance; reject insufficient context |
 | generate.py | Full-history cache; learned basic timing; supplied Bonus timing; optional MIDI/WAV listening output in one command |
 | reference.py | All-song/all-meter default reference; explicit optional subsets |
 | evaluate.py | Unmodified TA metric functions, seeded sampling and coverage reporting; reject incomplete/undefined comparisons |
 | render.py | Explicit FluidSynth/SoundFont rendering and PCM checks |
-| export.py | Inference weights/config/vocabulary/source programs without optimizer |
+| export.py | Inference weights/config/vocabulary/source programs and training provenance/source-checkpoint hash without optimizer |
+| experiment_stage.py | Require full-corpus final checkpoint: exact configured step, random init, zero validation, 896 positive source exposures and matching fingerprint |
+| audit.py | Check declared final output sets, prompt preservation, MIDI/WAV boundaries, metrics, checkpoint links and manual-review readiness |
 | utils.py | Atomic JSON, hashes, seeds and device selection |
 | cli.py, __main__.py | Explicit commands; no training on import |
 
@@ -63,6 +68,18 @@ with no sliding window or context truncation.
 CPU regressions compare all parameter gradients to native T5 and cached logits to
 full-history decoding, including sequences longer than the query block size.
 
-Complete experiments, WAV synthesis and report remain pending. Source-data audits
-and all 13 supplied prompt encodings passed before preparation. Training capacity
-checks are distinct from final music-quality evaluation.
+## Numeric-field inference
+
+Generation defaults to sampling each numeric digit. In `sample` mode, temperature,
+top-k and top-p apply to numeric choices and categorical tokens. The optional
+`--numeric-strategy beam` searches complete canonical integers with a fixed beam width
+of four, scoring legal digit choices with temperature-scaled probabilities. Top-k and
+top-p do not filter those digit choices in beam mode; they continue to apply to
+categorical tokens such as pitches, velocities and event types. This mode changes only
+numeric-field decoding and does not impose musical duration or note-count limits.
+
+Final checkpoints have been launched but are not yet certified complete. The final
+generation EOS behavior, WAV sets, evaluation, listening review and report remain
+pending. Source-data audits and all 13 supplied prompt encodings passed before
+preparation. Training capacity checks and synthetic tests are distinct from final
+music-quality evaluation.
