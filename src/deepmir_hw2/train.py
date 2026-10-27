@@ -20,6 +20,8 @@ from .data import MusicCorpus, collate
 from .models import build_model
 from .utils import choose_device, read_json, seed_everything, write_json
 
+FINAL_CORPUS_SIZE = 896
+
 
 def checkpoint_path(path: str | Path, preference: str = "best") -> Path:
     path = Path(path)
@@ -68,6 +70,12 @@ def save_checkpoint(path: Path, state: dict) -> None:
 def train(args: argparse.Namespace) -> None:
     config = read_json(args.config)
     t, d = config["training"], config["data"]
+    training_mode = config.get("training_mode", "standard")
+    if args.all_training:
+        training_mode = "full_corpus"
+        config["training_mode"] = training_mode
+    if training_mode not in {"standard", "full_corpus"}:
+        raise ValueError("training_mode must be standard or full_corpus")
     if args.steps is not None:
         t["steps"] = args.steps
     if args.batch_size is not None:
@@ -88,6 +96,13 @@ def train(args: argparse.Namespace) -> None:
             raise ValueError(f"{key} must be positive")
     if args.resume and args.init_from:
         raise ValueError("--resume and --init-from are mutually exclusive")
+    if training_mode == "full_corpus" and args.init_from:
+        raise ValueError(
+            "Full-corpus final training must start from random initialization; "
+            "--init-from is diagnostic-only"
+        )
+    if training_mode == "full_corpus" and d.get("validation_fraction") != 0:
+        raise ValueError("full_corpus mode requires data.validation_fraction=0")
     if args.stop_after is not None and args.stop_after <= 0:
         raise ValueError("--stop-after must be positive")
     directory = Path(args.output)
@@ -109,6 +124,14 @@ def train(args: argparse.Namespace) -> None:
         raise ValueError("CPU smoke tests require precision=fp32")
     seed_everything(config["seed"])
     corpus = MusicCorpus(args.data)
+    expected_songs = FINAL_CORPUS_SIZE if training_mode == "full_corpus" else None
+    if training_mode == "full_corpus" and d.get("expected_songs", expected_songs) != expected_songs:
+        raise ValueError(f"full_corpus data.expected_songs must be {expected_songs}")
+    if expected_songs is not None and len(corpus.songs) != expected_songs:
+        raise ValueError(
+            f"{training_mode} mode requires exactly {expected_songs} corpus songs; "
+            f"found {len(corpus.songs)}"
+        )
     if d["max_tokens"] == "auto":
         d["max_tokens"] = corpus.required_context(config["task"], d["bars"])
     required = corpus.required_context(config["task"], d["bars"])
@@ -117,7 +140,10 @@ def train(args: argparse.Namespace) -> None:
             f"Provided complete windows require {required} tokens; configured max_tokens="
             f"{d['max_tokens']}. Increase context instead of truncating music."
         )
-    training_names, validation_names = corpus.split(config["seed"], d["validation_fraction"])
+    if training_mode == "full_corpus":
+        training_names, validation_names = sorted(corpus.songs), []
+    else:
+        training_names, validation_names = corpus.split(config["seed"], d["validation_fraction"])
     model = build_model(config, corpus.tokenizer).to(device)
     if t.get("gradient_checkpointing"):
         model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
@@ -133,6 +159,10 @@ def train(args: argparse.Namespace) -> None:
     scaler = torch.amp.GradScaler("cuda", enabled=precision == "fp16")
     sampler_rng = random.Random(config["seed"])
     start_step, best_loss, tokens_seen = 0, float("inf"), 0
+    song_sample_counts = dict.fromkeys(sorted(corpus.songs), 0)
+    initialization = "random" if not args.init_from else "checkpoint"
+    initialized_from = str(args.init_from) if args.init_from else None
+    source_commit = os.environ.get("HW2_SOURCE_COMMIT")
     if args.resume or args.init_from:
         saved = load_checkpoint(args.resume or args.init_from, "latest" if args.resume else "best")
         if saved["config"]["task"] != config["task"] or saved["config"]["model"] != config["model"]:
@@ -145,11 +175,67 @@ def train(args: argparse.Namespace) -> None:
                 raise ValueError("Inference exports cannot resume optimizer state; use --init-from")
             if saved["data_fingerprint"] != corpus.manifest["fingerprint"]:
                 raise ValueError("Cannot resume with a different corpus")
+            provenance = saved.get("training_provenance")
+            if training_mode == "full_corpus":
+                if not provenance or provenance.get("mode") != training_mode:
+                    raise ValueError("Cannot resume full-corpus mode without matching provenance")
+                if provenance.get("checkpoint") != checkpoint_path(args.resume, "latest").name:
+                    raise ValueError(
+                        "Resume checkpoint provenance filename differs from checkpoint"
+                    )
+                if provenance.get("expected_songs") != expected_songs:
+                    raise ValueError("Resume corpus-size policy differs from checkpoint")
+                if training_mode == "full_corpus" and provenance.get("initialization") != "random":
+                    raise ValueError(
+                        "Final full-corpus run must descend from random initialization"
+                    )
+                initialization = provenance["initialization"]
+                initialized_from = provenance.get("initialized_from")
+                source_commit = provenance.get("source_commit", source_commit)
+            if provenance:
+                counts = provenance.get("song_sample_counts", {})
+                if set(counts) != set(song_sample_counts):
+                    raise ValueError("Resume checkpoint song exposure differs from corpus")
+                try:
+                    song_sample_counts = {name: int(counts[name]) for name in song_sample_counts}
+                except (TypeError, ValueError) as error:
+                    raise ValueError(
+                        "Resume checkpoint has invalid song exposure counts"
+                    ) from error
+                if any(value < 0 for value in song_sample_counts.values()):
+                    raise ValueError("Resume checkpoint has negative song exposure counts")
+                sampled = all(song_sample_counts.values())
+                if provenance.get("all_songs_sampled") != sampled:
+                    raise ValueError("Resume checkpoint has inconsistent song coverage")
+                if provenance.get("source_names") != sorted(corpus.songs):
+                    raise ValueError("Resume checkpoint source-song list differs from corpus")
+                if provenance.get("data_fingerprint") != corpus.manifest["fingerprint"]:
+                    raise ValueError("Resume checkpoint provenance fingerprint differs from corpus")
             # A resume must preserve the sampling distribution and optimizer schedule.
             if saved["config"] != config:
                 raise ValueError(
                     "Resume requires the original configuration; use --init-from for a new stage"
                 )
+            expected_samples = (
+                saved["step"]
+                * config["training"]["batch_size"]
+                * config["training"]["gradient_accumulation"]
+            )
+            if provenance and sum(song_sample_counts.values()) != expected_samples:
+                raise ValueError(
+                    "Resume checkpoint song exposure total differs from completed steps"
+                )
+            if provenance:
+                sampled = all(song_sample_counts.values())
+                expected_complete = (
+                    training_mode == "full_corpus"
+                    and saved["step"] == config["training"]["steps"]
+                    and sampled
+                )
+                if provenance.get("complete") != expected_complete:
+                    raise ValueError("Resume checkpoint has invalid full-corpus completion status")
+                if provenance.get("step") != saved["step"]:
+                    raise ValueError("Resume checkpoint provenance step differs from checkpoint")
             optimizer.load_state_dict(saved["optimizer"])
             scaler.load_state_dict(saved["scaler"])
             sampler_rng.setstate(saved["sampler_rng"])
@@ -178,6 +264,7 @@ def train(args: argparse.Namespace) -> None:
             "gpu": torch.cuda.get_device_name() if device.startswith("cuda") else None,
             "parameters": sum(p.numel() for p in model.parameters()),
             "data_fingerprint": corpus.manifest["fingerprint"],
+            "source_commit": source_commit,
         },
     )
     stop_requested = False
@@ -197,9 +284,9 @@ def train(args: argparse.Namespace) -> None:
             else contextlib.nullcontext()
         )
 
-    def sample_batch(rng: random.Random, names: list[str], augment: bool) -> dict:
-        examples = [
-            corpus.sample(
+    def sample_batch(rng: random.Random, names: list[str], augment: bool) -> tuple[dict, list[str]]:
+        sampled = [
+            corpus.sample_with_song(
                 names,
                 rng,
                 config["task"],
@@ -209,7 +296,10 @@ def train(args: argparse.Namespace) -> None:
             )
             for _ in range(t["batch_size"])
         ]
-        return collate(examples, config["task"], corpus.tokenizer.pad_id, "cpu")
+        examples, song_names = zip(*sampled, strict=True)
+        return collate(list(examples), config["task"], corpus.tokenizer.pad_id, "cpu"), list(
+            song_names
+        )
 
     def evaluate() -> float:
         model.eval()
@@ -218,7 +308,8 @@ def train(args: argparse.Namespace) -> None:
         with torch.inference_mode():
             for _ in range(t["validation_batches"]):
                 batch = {
-                    k: v.to(device) for k, v in sample_batch(rng, validation_names, False).items()
+                    k: v.to(device)
+                    for k, v in sample_batch(rng, validation_names, False)[0].items()
                 }
                 with autocast():
                     loss, n = token_loss(model, batch, config["task"])
@@ -240,10 +331,14 @@ def train(args: argparse.Namespace) -> None:
         with (directory / "metrics.jsonl").open("a", buffering=1) as log:
             for step in range(start_step + 1, final_step + 1):
                 optimizer.zero_grad(set_to_none=True)
-                batches = [
+                sampled_batches = [
                     sample_batch(sampler_rng, training_names, True)
                     for _ in range(t["gradient_accumulation"])
                 ]
+                batches = [batch for batch, _ in sampled_batches]
+                for _, names in sampled_batches:
+                    for name in names:
+                        song_sample_counts[name] += 1
                 total_targets = sum(
                     int(
                         (b["labels"][:, 1:] if config["task"] == "basic" else b["labels"])
@@ -315,6 +410,29 @@ def train(args: argparse.Namespace) -> None:
                     or stop_requested
                 ):
                     path = directory / f"step-{step:07d}.pt"
+                    coverage_complete = (
+                        training_mode == "full_corpus"
+                        and step == t["steps"]
+                        and all(song_sample_counts.values())
+                    )
+                    provenance = {
+                        "mode": training_mode,
+                        "initialization": initialization,
+                        "initialized_from": initialized_from,
+                        "source_commit": source_commit,
+                        "checkpoint": path.name,
+                        "step": step,
+                        "expected_songs": expected_songs,
+                        "corpus_songs": len(corpus.songs),
+                        "source_names": sorted(corpus.songs),
+                        "data_fingerprint": corpus.manifest["fingerprint"],
+                        "training_songs": len(training_names),
+                        "validation_songs": len(validation_names),
+                        "song_sample_counts": song_sample_counts.copy(),
+                        "all_songs_sampled": all(song_sample_counts.values()),
+                        "configured_steps_complete": step == t["steps"],
+                        "complete": coverage_complete,
+                    }
                     save_checkpoint(
                         path,
                         {
@@ -330,6 +448,7 @@ def train(args: argparse.Namespace) -> None:
                             "step": step,
                             "best_loss": best_loss,
                             "tokens_seen": tokens_seen,
+                            "training_provenance": provenance,
                             "sampler_rng": sampler_rng.getstate(),
                             "python_rng": random.getstate(),
                             "torch_rng": torch.get_rng_state(),
@@ -344,6 +463,7 @@ def train(args: argparse.Namespace) -> None:
                             directory / "best.json",
                             {"checkpoint": path.name, "step": step, "validation_loss": best_loss},
                         )
+                    write_json(directory / "training_provenance.json", provenance)
                     protected = {path.name}
                     if (directory / "best.json").exists():
                         protected.add(read_json(directory / "best.json")["checkpoint"])

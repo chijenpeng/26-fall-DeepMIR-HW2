@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+export HW2_SOURCE_COMMIT="${HW2_SOURCE_COMMIT:-$(git rev-parse HEAD)}"
+
 hw2_python="${HW2_PYTHON:-python}"
 hw2_data="${HW2_DATA:-data/prepared}"
 hw2_output="${HW2_OUTPUT:-outputs}"
@@ -22,11 +24,14 @@ case "${1:-help}" in
     ;;
   final-basic|final-bonus)
     : "${CUDA_VISIBLE_DEVICES:?Set the authorized physical GPU index explicitly}"
-    : "${HW2_FINAL_STEPS:?Set the final-stage step count after assessing convergence}"
     task="${1#final-}"
-    hw2_command train --config "configs/$task.json" --data "$hw2_data" \
-      --init-from "runs/$task" --all-training --steps "$HW2_FINAL_STEPS" \
-      --output "runs/$task-final"
+    if [[ "$task" == basic ]]; then
+      final_checkpoint="$hw2_basic"
+    else
+      final_checkpoint="$hw2_bonus"
+    fi
+    hw2_command train --config "configs/$task-full-corpus.json" --data "$hw2_data" \
+      --output "$final_checkpoint"
     ;;
   generate)
     while read -r setting top_k temperature; do
