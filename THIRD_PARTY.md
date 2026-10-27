@@ -21,8 +21,14 @@
   *Pop Music Transformer*, ACM Multimedia 2020. The explicit annotated bar-length
   event representation preserves supplied pulse timing and MIDI event values.
   The separate evaluation view follows the TA tokenizer's 16-position-per-beat grid.
-- No SoundFont has been chosen or bundled. Any future SoundFont must retain its
-  own attribution/license and is used for audio rendering only.
+- Development WAVs use TimGM6mb, Tim Brechbill (2004) and David Bolton (2010),
+  GPL-2. The font is fetched from the Debian timgm6mb-soundfont source package:
+  https://deb.debian.org/debian/pool/main/t/timgm6mb-soundfont/ . Archive SHA-256:
+  `af8f3a00e416dfb262bcaa904a1c84df04a51b72bbc1313aed012bc754bdf99b`, checked
+  against Debian's `.dsc`; extracted font SHA-256:
+  `c5378b62028c920cb11e4803327983fee2f2cdff5dc89c708e39da417e51c854`.
+  Debian's copyright notice is retained beside the local font under `.tools/`.
+  Font binaries are not bundled in Git and are rendering assets, not training data.
 
 The package, tests and documentation were written with OpenAI Codex assistance.
 Only checks and experiments explicitly recorded as executed should be reported as results.

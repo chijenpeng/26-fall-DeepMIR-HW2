@@ -3,9 +3,10 @@
 Chi-Jen Peng (R14725022)
 
 **Status:** formal work resumed on 2026-10-26. All 896 songs were prepared on both
-servers with matching fingerprints. Development training is launching across the
-three authorized GPUs; see [run record](docs/experiments.md) for measured capacity,
-commands and progress. No final model, listening collection or report is claimed.
+servers with matching fingerprints. The two basic development runs were stopped
+after validation overfitting; their best checkpoints produced development listening
+samples. Bonus training continues. See [run record](docs/experiments.md) for measured
+capacity, commands and limitations. Final all-song models and the report remain pending.
 
 See [module guide](docs/architecture.md), [assignment checklist](docs/requirements.md)
 and [source attribution](THIRD_PARTY.md).
@@ -35,7 +36,8 @@ git -C third_party/MusDr checkout b034cf86550963cf2021299eafb1001d0fe34853
 On a Linux NVIDIA server, bash scripts/bootstrap.sh installs project-local Python 3.12
 and PyTorch 2.8.0/CUDA 12.8 without sudo/system-Python changes. Versions are recorded in
 environment.freeze.txt. WAV synthesis additionally requires FluidSynth and a licensed
-.sf2 SoundFont, which has not yet been selected or validated.
+.sf2 SoundFont. Development samples use TimGM6mb from Debian, with source/license
+and SHA-256 recorded in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 Install the non-pip renderer before requesting listening samples:
 
@@ -226,7 +228,8 @@ deepmir export --checkpoint runs/bonus-final --output models/bonus.pt
 
 Rendering is available both through generate --soundfont and the separate render
 command. The external process/PCM/failure handling has synthetic tests; a real
-SoundFont has not yet been selected or verified.
+The TimGM6mb SoundFont was validated on the development samples; final listening
+selection and all required output batches remain pending.
 Submit 20 selected basic-A pairs, 9 continuation pairs (mark each prompt's best),
 10 bonus pairs, source/inference weights/README/requirements and the 16:9 report.
 

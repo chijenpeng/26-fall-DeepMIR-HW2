@@ -1,6 +1,7 @@
 """Full-context generation with learned timing and no per-bar note-count restrictions."""
 
 import hashlib
+import json
 import math
 from argparse import Namespace
 from dataclasses import asdict, dataclass
@@ -126,6 +127,7 @@ def generate_bars(
     prefix=None,
     melody=None,
     conditioned_headers=None,
+    on_bar=None,
 ):
     if bar_count < 1:
         raise ValueError("Need at least one generated bar")
@@ -204,6 +206,8 @@ def generate_bars(
                 integer(bar, 0, 16383)
         tokenizer.validate_bar(bar)
         bars.append(bar)
+        if on_bar is not None:
+            on_bar(len(bars), len(engine.history))
     return bars, {"context_tokens": len(engine.history)}
 
 
@@ -290,6 +294,10 @@ def generate(args):
             prefix,
             melody,
             headers,
+            on_bar=lambda completed, tokens, song=name: print(
+                json.dumps({"song": song, "generated_bars": completed, "context_tokens": tokens}),
+                flush=True,
+            ),
         )
         generated_origin = origin_us
         if args.mode == "continue":

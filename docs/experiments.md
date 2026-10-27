@@ -2,8 +2,9 @@
 
 Formal work resumed by the author on 2026-10-26 (Asia/Taipei). This is an execution
 record, not final music-quality results. Original-data preprocessing completed on
-both servers; development training is active. All-song final stages, listening
-selection, assignment metrics and final report remain pending.
+both servers. Both basic runs stopped on 2026-10-27; Bonus development continues.
+All-song final stages, final listening selection, assignment comparisons and report
+remain pending.
 
 ## Source data and reproducibility
 
@@ -31,6 +32,10 @@ selection, assignment metrics and final report remain pending.
 | emma / 0, RTX 4070 SUPER 12GB | Basic GPT-2, 38,862,848 parameters | basic.json, LR 3e-4 | runs/basic | 30,000 |
 | emma / 1, RTX 4070 SUPER 12GB | Same basic model, LR comparison | basic-low-lr.json, LR 2e-4 | runs/basic-low-lr | 30,000 |
 | loopy / 1, RTX A4500 20GB | Bonus Option B T5, 38,375,424 parameters | bonus.json | runs/bonus | 12,000 |
+
+The basic step limits above are the initial caps, not completed step counts. The
+author explicitly authorized stopping them on 2026-10-27; see the listening record
+below. Both emma GPUs are now idle after development sample generation.
 
 All use one complete window per microbatch and 16 accumulation steps, BF16,
 gradient checkpointing and token-weighted loss. Basic originally proposed 2 x 8;
@@ -118,3 +123,55 @@ Generation still needs all 60 Basic A comparisons, nine continuations and ten
 accompaniments, followed by required metrics/listening selection, WAV validation,
 final exports, report and submission audit. Current jobs do not certify any of
 those artifacts as complete.
+
+## 2026-10-27: early stop and development listening
+
+At the author's instruction, both basic trainers received SIGTERM, completed their
+current optimizer update, saved latest checkpoints and exited. They were not killed
+mid-write. Bonus on loopy physical GPU 1 continued uninterrupted.
+
+| Basic run | Last saved step | Retained best step | Best validation loss |
+|---|---|---|---|
+| LR 3e-4 | 23,944 | 5,500 | 2.335745 |
+| LR 2e-4 | 24,032 | 7,000 | 2.436306 |
+
+Each best checkpoint was sampled using seed 2026. A is top-k 20 / temperature 0.9;
+C is top-k 50 / temperature 1.1. All four successful samples have 32 bars. The
+continuations use provided prompt 001 (eight bars) plus 24 generated bars, with no
+reference targets. These development models still use the 851/45 split.
+
+| Run / mode / setting | Result | Generated notes | Context tokens |
+|---|---|---|---|
+| 3e-4 / unconditional / A | Failed: complete generation exceeded 25,451-token capacity | Not accepted | Capacity exhausted |
+| 3e-4 / unconditional / C | Completed | 408 | 5,411 |
+| 2e-4 / unconditional / A | Completed | 819 | 9,527 |
+| 3e-4 / continuation / A | Completed | 550 | 7,954 including prompt |
+| 2e-4 / continuation / A | Completed | 607 | 8,446 including prompt |
+
+The unconditional samples use different settings and are not a controlled LR
+comparison. The continuation pair uses the same prompt, setting and seed. Failure
+of the lowest-validation-loss checkpoint under A shows that validation CE alone
+does not establish successful generation. No per-bar note cap or context truncation
+was added to conceal this failure.
+
+Artifacts live under ignored `outputs/dev-20261027/`: complete MIDI/WAVs, generation
+and rendering metadata, per-file hashes, one-piece metric diagnostics, the failed-A
+log and `review.json`. TimGM6mb is the same explicit SoundFont for all samples;
+FluidSynth 2.6.1 rendered non-silent PCM at 44.1kHz. Forty-five-second previews of
+continuations begin four seconds before the supplied/generated transition; complete
+files retain all events and release tails. Preview gain is a uniform 8x across all
+four files, checked to avoid clipping; full WAVs retain the original renderer level.
+
+The samples exposed two technical/quality limitations. Generated note-off events
+can extend far beyond BAR_END (main continuation: bar end 119.97s, final note-off
+444.97s). Full outputs retain those tails instead of silently shortening them.
+Separately, maximum-PPQ export could exceed PrettyMIDI's 10-million-tick allocation
+guard. Export now adapts PPQ, retaining exact pulse-to-quarter ratios and physical
+event times within one output tick. A 320s/5,000s release-tail regression verifies
+that notes, controllers and all 32 bars survive reading without clipping. The
+already generated lower-LR continuation was rescaled once; every raw MIDI message
+was retained, with maximum event-time error 15.1 microseconds (below its 30.3us tick).
+
+These are listening/debugging samples, not the final required 20-piece comparisons
+or final all-song models. Generation stability and excessive release tails require
+attention before final delivery. No subjective listening-quality claim is made.

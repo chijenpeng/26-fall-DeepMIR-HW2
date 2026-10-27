@@ -128,3 +128,24 @@ def test_same_tick_retrigger_releases_old_note_before_starting_new_note(tmp_path
             events.append((tick, event.type))
     shared = raw.ticks_per_beat
     assert [kind for time, kind in events if time == shared] == ["note_off", "note_on"]
+
+
+@pytest.mark.parametrize("tail", [320.123456, 5000.123456])
+def test_long_release_tail_adapts_tick_resolution_without_shortening_music(tmp_path, tail):
+    from deepmir_hw2.music import BarTiming
+
+    inst = pretty_midi.Instrument(0, name="PIANO")
+    inst.notes = [pretty_midi.Note(83, 60, 0.123456, tail)]
+    inst.control_changes = [pretty_midi.ControlChange(64, 0, tail + 1.111111)]
+    path = tmp_path / "long-tail.mid"
+    write_midi(path, [inst], [BarTiming((500_000,) * 4, 4, 4)] * 32)
+    raw = mido.MidiFile(path)
+    assert raw.ticks_per_beat < 32767
+    assert sum(message.type == "marker" for message in raw.tracks[0]) == 33
+    restored = pretty_midi.PrettyMIDI(str(path)).instruments[0]
+    tick_seconds = 0.5 / raw.ticks_per_beat
+    assert len(restored.notes) == 1
+    assert restored.notes[0].velocity == 83
+    assert restored.notes[0].start == pytest.approx(inst.notes[0].start, abs=tick_seconds)
+    assert restored.notes[0].end == pytest.approx(inst.notes[0].end, abs=tick_seconds)
+    assert restored.control_changes[0].time == pytest.approx(tail + 1.111111, abs=tick_seconds)
