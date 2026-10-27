@@ -106,7 +106,10 @@ Bonus melody/piano sequences exclude reference chords.
 Sources are hashed and all annotated bars, including silence, are retained. When the
 last event starts beyond the last annotated downbeat, the final supplied bar width and
 beat interval are extended to close that bar. All 896 sources passed preparation.
-Events that cannot be assigned are reported, never silently dropped.
+MIDI notes, controllers and bends beyond the encoded range are rejected. Chord labels
+are optional annotations; labels at or after the final encoded bar are excluded. The
+source audit found 204 such trailing chord starts in 151 of 896 songs: 150 at the
+terminal boundary and 54 later.
 
 ## Training
 
