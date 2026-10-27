@@ -7,12 +7,12 @@ import torch
 
 from deepmir_hw2.data import MusicCorpus
 from deepmir_hw2.reference import reference
-from deepmir_hw2.train import load_checkpoint, train
+from deepmir_hw2.train import FINAL_CORPUS_SIZE, load_checkpoint, train
 from deepmir_hw2.utils import read_json
 
 
 def arguments(config, data, output, **kwargs):
-    return Namespace(
+    values = dict(
         config=str(config),
         data=str(data),
         output=str(output),
@@ -23,8 +23,9 @@ def arguments(config, data, output, **kwargs):
         batch_size=None,
         all_training=False,
         stop_after=None,
-        **kwargs,
     )
+    values.update(kwargs)
+    return Namespace(**values)
 
 
 def test_song_split_and_paired_target_alignment(prepared):
@@ -73,6 +74,96 @@ def test_basic_augmentation_transposes_given_chord_with_notes(prepared):
     sequence = [tokenizer.tok2idx["Chord_C:maj"], tokenizer.tok2idx["Pitch_60"]]
     shifted = tokenizer.transpose(sequence, 2)
     assert shifted == [tokenizer.tok2idx["Chord_D:maj"], tokenizer.tok2idx["Pitch_62"]]
+
+
+def test_full_corpus_policy_tracks_song_exposure_across_resume(
+    prepared, tiny_config, tmp_path, monkeypatch
+):
+    import deepmir_hw2.train as training
+
+    monkeypatch.setattr(training, "FINAL_CORPUS_SIZE", 4)
+    tiny_config["training_mode"] = "full_corpus"
+    tiny_config["data"]["expected_songs"] = 4
+    tiny_config["data"]["validation_fraction"] = 0.0
+    tiny_config["training"]["steps"] = 8
+    config = tmp_path / "full-corpus.json"
+    config.write_text(json.dumps(tiny_config))
+    output = tmp_path / "full-corpus"
+
+    first = arguments(config, prepared, output)
+    first.stop_after = 2
+    train(first)
+    partial = load_checkpoint(output, "latest")["training_provenance"]
+    assert partial["mode"] == "full_corpus"
+    assert partial["expected_songs"] == 4
+    assert sum(partial["song_sample_counts"].values()) == 8
+    assert partial["complete"] is False
+
+    resume = arguments(config, prepared, output)
+    resume.resume = str(output)
+    train(resume)
+    final = load_checkpoint(output, "latest")["training_provenance"]
+    assert sum(final["song_sample_counts"].values()) == 32
+    assert final["all_songs_sampled"] == all(final["song_sample_counts"].values())
+    assert final["all_songs_sampled"] is True
+    assert final["complete"] is True
+    assert read_json(output / "training_provenance.json") == final
+
+
+def test_final_full_corpus_requires_896_songs_and_rejects_warmstart(
+    prepared, tiny_config, tmp_path
+):
+    tiny_config["training_mode"] = "full_corpus"
+    tiny_config["data"]["validation_fraction"] = 0.0
+    config = tmp_path / "full-corpus.json"
+    config.write_text(json.dumps(tiny_config))
+
+    warmstart = arguments(config, prepared, tmp_path / "warmstart", init_from="dev.pt")
+    with pytest.raises(ValueError, match="random initialization"):
+        train(warmstart)
+
+    no_warmstart = arguments(config, prepared, tmp_path / "wrong-corpus")
+    with pytest.raises(ValueError, match=f"exactly {FINAL_CORPUS_SIZE}"):
+        train(no_warmstart)
+
+
+def test_resume_rejects_corrupt_song_coverage(prepared, tiny_config, tmp_path, monkeypatch):
+    import deepmir_hw2.train as training
+
+    monkeypatch.setattr(training, "FINAL_CORPUS_SIZE", 4)
+    tiny_config["training_mode"] = "full_corpus"
+    tiny_config["data"]["expected_songs"] = 4
+    tiny_config["data"]["validation_fraction"] = 0.0
+    tiny_config["training"]["steps"] = 2
+    config = tmp_path / "full-corpus.json"
+    config.write_text(json.dumps(tiny_config))
+    output = tmp_path / "full-corpus"
+    partial = arguments(config, prepared, output)
+    partial.stop_after = 1
+    train(partial)
+
+    pointer = read_json(output / "latest.json")
+    checkpoint_path = output / pointer["checkpoint"]
+    original = load_checkpoint(checkpoint_path)
+    damaged = dict(original)
+    bad_provenance = dict(original["training_provenance"])
+    bad_counts = dict(bad_provenance["song_sample_counts"])
+    name = next(iter(bad_counts))
+    bad_counts[name] = -1
+    bad_provenance["song_sample_counts"] = bad_counts
+    damaged["training_provenance"] = bad_provenance
+    torch.save(damaged, checkpoint_path)
+    resume = arguments(config, prepared, output, resume=str(output))
+    with pytest.raises(ValueError, match="negative song exposure"):
+        train(resume)
+
+    invalid_complete = dict(original)
+    bad_provenance = dict(original["training_provenance"])
+    bad_provenance["complete"] = True
+    invalid_complete["training_provenance"] = bad_provenance
+    torch.save(invalid_complete, checkpoint_path)
+    with pytest.raises(ValueError, match="invalid full-corpus completion"):
+        train(resume)
 
 
 @pytest.mark.parametrize("task", ["basic", "bonus"])

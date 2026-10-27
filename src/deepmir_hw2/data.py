@@ -57,6 +57,30 @@ class MusicCorpus:
         transpose: int = 0,
     ) -> dict[str, list[int]]:
         song = self.songs[rng.choice(names)]
+        return self._sample_song(song, task, bars, max_tokens, transpose, rng)
+
+    def sample_with_song(
+        self,
+        names: list[str],
+        rng: random.Random,
+        task: str,
+        bars: int,
+        max_tokens: int,
+        transpose: int = 0,
+    ) -> tuple[dict[str, list[int]], str]:
+        """Sample an example and return the source song for training provenance."""
+        name = rng.choice(names)
+        return self._sample_song(self.songs[name], task, bars, max_tokens, transpose, rng), name
+
+    def _sample_song(
+        self,
+        song: dict,
+        task: str,
+        bars: int,
+        max_tokens: int,
+        transpose: int,
+        rng: random.Random,
+    ) -> dict[str, list[int]]:
         tracks = ["basic"] if task == "basic" else ["melody", "piano"]
         n_bars = len(song[f"{tracks[0]}_offsets"]) - 1
         start = rng.randrange(max(1, n_bars - bars + 1))

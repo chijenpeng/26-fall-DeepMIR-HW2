@@ -1,10 +1,53 @@
-# Training launch record
+# Training and experiment record
 
-Formal work resumed by the author on 2026-10-26 (Asia/Taipei). This is an execution
-record, not final music-quality results. Original-data preprocessing completed on
-both servers. Both basic runs stopped on 2026-10-27; Bonus development continues.
-All-song final stages, final listening selection, assignment comparisons and report
-remain pending.
+Updated 2026-10-27 (Asia/Taipei). This is an execution record, not final
+music-quality results. Source preparation is complete, but final-stage checkpoints
+have not yet been validated and all generated deliverables and the report remain
+pending. The development measurements below are historical diagnostics.
+Final-bar EOS/numeric sampling is under active diagnosis. A code fix and traces do
+not count as resolution until real-model probes confirm final-bar behavior.
+
+## Formal all-song runs launched 2026-10-27
+
+Both final runs use reviewed source commit
+`63c4a55ba2962c95674eccbf687eec20c431279c`. They start from random initialization,
+train directly on all 896 prepared songs, and use no validation split. They do not
+warm-start from the old development checkpoints.
+
+| Host / physical GPU | Output | Config | Final steps | Learning rate | State |
+|---|---|---|---:|---:|---|
+| emma / 0, RTX 4070 SUPER 12GB | `runs/basic-final` | `configs/basic-full-corpus.json` | 9,000 | 2e-4 | Launched; completion and checkpoint audit pending |
+| emma / 1, RTX 4070 SUPER 12GB | `runs/bonus-final` | `configs/bonus-full-corpus.json` | 12,000 | 3e-4 | Launched; completion and checkpoint audit pending |
+
+The launch pins `HW2_SOURCE_COMMIT` to the reviewed commit. `full_corpus` mode
+requires 896 songs and zero validation songs. Checkpoint provenance records all
+source names, a positive exposure count for every source, initialization mode,
+configured step, checkpoint basename and prepared-data fingerprint. A checkpoint
+is complete only at its exact configured final step after all 896 sources have
+been sampled. Before export, `python -m deepmir_hw2.experiment_stage require-final
+--checkpoint RUN_DIR` checks the configuration, random initialization, 896 positive
+counts, fingerprint, exact step and aggregate exposures (`steps × batch size ×
+gradient accumulation`). The export retains provenance and identifies the source
+checkpoint by filename and SHA-256.
+
+Only after both `require-final` checks pass should final weights be exported and
+used for generation. Then run
+`deepmir audit --root . --selected-setting B --output outputs/audit.json` to check
+the fixed output inventories, evaluation summaries and exported-weight links.
+Listening quality, per-prompt Basic B selection, report content/layout, cloud access
+and LMS packaging remain manual checks. The run launch itself makes no claim about
+final model quality or assignment compliance.
+
+The old Bonus development run on loopy physical GPU 1 stopped and saved at step
+6,655; old Basic development checkpoints at steps 23,944 and 24,032 remain
+diagnostic only. Loopy physical GPU 1 is reserved for the parent's numeric/EOS
+diagnosis. No training is to be started there as part of the final runs.
+
+## Historical development record through 2026-10-27
+
+Formal work resumed on 2026-10-26 (Asia/Taipei). Original-data preprocessing
+completed on both servers. These dated measurements and listening results describe
+the old development runs only; none are evidence for the current final runs.
 
 ## Source data and reproducibility
 
@@ -25,7 +68,7 @@ remain pending.
 - CUDA visibility explicitly maps the authorized physical GPU to process device
   `cuda:0`. Loopy physical GPU 0 is excluded.
 
-## GPU allocation
+## Historical development GPU allocation
 
 | Host / physical GPU | Model | Config | Output | Step limit |
 |---|---|---|---|---|
@@ -33,9 +76,10 @@ remain pending.
 | emma / 1, RTX 4070 SUPER 12GB | Same basic model, LR comparison | basic-low-lr.json, LR 2e-4 | runs/basic-low-lr | 30,000 |
 | loopy / 1, RTX A4500 20GB | Bonus Option B T5, 38,375,424 parameters | bonus.json | runs/bonus | 12,000 |
 
-The basic step limits above are the initial caps, not completed step counts. The
-author explicitly authorized stopping them on 2026-10-27; see the listening record
-below. Both emma GPUs are now idle after development sample generation.
+The Basic step limits above are initial development caps, not completed step counts.
+The author explicitly authorized stopping them on 2026-10-27; see the listening
+record below. At the end of that development period, both emma GPUs were idle. The
+separate final runs launched later on 2026-10-27 are listed at the top of this file.
 
 All use one complete window per microbatch and 16 accumulation steps, BF16,
 gradient checkpointing and token-weighted loss. Basic originally proposed 2 x 8;
@@ -102,8 +146,9 @@ Measured on the A4500 with `scripts/benchmark_gpu.py`, BF16, checkpointing, one
 window/microbatch. These are capacity extremes, not average training-step times;
 an actual optimizer step accumulates sixteen windows. No benchmark weights are
 saved or used as final models. Superseded 10/26-step Bonus pilot checkpoints were
-deleted; logs retain capacity/timing evidence. Formal Bonus restarted from random
-initialization with the final 12,000-step config.
+deleted; logs retain capacity/timing evidence. The historical loopy development
+run restarted from random initialization with a 12,000-step schedule, then stopped
+at step 6,655; it is not the current formal Bonus run.
 
 CPU tests compare full logits and every parameter gradient against unmodified T5,
 with and without outer checkpointing. Cached decoding is checked against eager
@@ -111,18 +156,19 @@ full-context logits across multiple prefix sizes, including histories longer tha
 the query block size. Cache key lengths are checked so block size cannot silently
 turn into a sliding-window cache.
 
-## Next selection and final stages
+## Development-stage plan before the final-run correction (superseded)
 
-Compare validation curves at the same steps and inspect generated development
-samples before choosing the basic LR. Preserve best and latest pointers; regular
-checkpoints retain optimizer, scaler and RNG for restarts. Final training must use
-`--all-training` on all 896 songs after development selection, then Basic A/B must
-share the same exported final checkpoint. Bonus inference remains melody-only.
+The earlier development plan was to compare validation curves and use the selected
+development checkpoints to seed an all-song stage. That plan was explicitly
+replaced: the formal final runs now start from random initialization on all 896
+songs, as documented at the top of this file. Development checkpoints are not
+warm-starts. Bonus inference remains melody-only.
 
-Generation still needs all 60 Basic A comparisons, nine continuations and ten
-accompaniments, followed by required metrics/listening selection, WAV validation,
-final exports, report and submission audit. Current jobs do not certify any of
-those artifacts as complete.
+At the time of this historical plan, generation still needed all 60 Basic A
+comparisons, nine continuations and ten accompaniments, followed by required
+metrics/listening selection, WAV validation, final exports, report and submission
+audit. Those final artifacts remain pending; current training jobs do not certify
+them as complete.
 
 ## 2026-10-27: early stop and development listening
 

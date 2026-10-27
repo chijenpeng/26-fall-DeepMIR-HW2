@@ -8,8 +8,82 @@ hw2_data="${HW2_DATA:-data/prepared}"
 hw2_output="${HW2_OUTPUT:-outputs}"
 hw2_basic="${HW2_BASIC_CHECKPOINT:-runs/basic-final}"
 hw2_bonus="${HW2_BONUS_CHECKPOINT:-runs/bonus-final}"
+hw2_basic_model="${HW2_BASIC_MODEL:-models/basic.pt}"
+hw2_bonus_model="${HW2_BONUS_MODEL:-models/bonus.pt}"
+hw2_numeric_strategy="${HW2_NUMERIC_STRATEGY:-sample}"
 
 hw2_command() { "$hw2_python" -m deepmir_hw2 "$@"; }
+
+resolve_source_commit() {
+  if [[ -n "${HW2_SOURCE_COMMIT:-}" ]]; then
+    export HW2_SOURCE_COMMIT
+    return
+  fi
+  if ! HW2_SOURCE_COMMIT="$(git rev-parse --verify HEAD 2>/dev/null)"; then
+    printf '%s\n' 'Set HW2_SOURCE_COMMIT when training outside a Git checkout.' >&2
+    exit 2
+  fi
+  export HW2_SOURCE_COMMIT
+}
+
+require_final() {
+  "$hw2_python" -m deepmir_hw2.experiment_stage require-final --checkpoint "$1"
+}
+
+latest_checkpoint_file() {
+  local run_dir="$1"
+  local checkpoint_name
+  checkpoint_name="$("$hw2_python" -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkpoint"])' \
+    "$run_dir/latest.json")"
+  printf '%s/%s\n' "$run_dir" "$checkpoint_name"
+}
+
+export_basic() {
+  local final_checkpoint_file
+  final_checkpoint_file="$(latest_checkpoint_file "$hw2_basic")"
+  require_final "$final_checkpoint_file"
+  hw2_command export --checkpoint "$final_checkpoint_file" --output "$hw2_basic_model"
+}
+
+export_bonus() {
+  local final_checkpoint_file
+  final_checkpoint_file="$(latest_checkpoint_file "$hw2_bonus")"
+  require_final "$final_checkpoint_file"
+  hw2_command export --checkpoint "$final_checkpoint_file" --output "$hw2_bonus_model"
+}
+
+validate_numeric_options() {
+  case "$hw2_numeric_strategy" in
+    sample|beam) ;;
+    *) printf 'Unknown numeric strategy: %s\n' "$hw2_numeric_strategy" >&2; exit 2 ;;
+  esac
+}
+
+generate_basic() {
+  validate_numeric_options
+  while read -r setting top_k temperature; do
+    hw2_command generate --checkpoint "$hw2_basic_model" --mode unconditional --count 20 --bars 32 \
+      --top-k "$top_k" --temperature "$temperature" --numeric-strategy "$hw2_numeric_strategy" \
+      --seed 2026 --output "$hw2_output/basic-a/$setting"
+    hw2_command generate --checkpoint "$hw2_basic_model" --mode continue \
+      --prompts POP909/prompts/basic-b --bars 24 --top-k "$top_k" \
+      --temperature "$temperature" --numeric-strategy "$hw2_numeric_strategy" \
+      --seed 2026 --output "$hw2_output/basic-b/$setting"
+  done <<SETTINGS
+A ${HW2_BASIC_A_TOP_K:-20} ${HW2_BASIC_A_TEMPERATURE:-0.9}
+B ${HW2_BASIC_B_TOP_K:-50} ${HW2_BASIC_B_TEMPERATURE:-0.9}
+C ${HW2_BASIC_C_TOP_K:-50} ${HW2_BASIC_C_TEMPERATURE:-1.1}
+SETTINGS
+}
+
+generate_bonus() {
+  validate_numeric_options
+  hw2_command generate --checkpoint "$hw2_bonus_model" --mode accompany \
+    --prompts POP909/prompts/bonus --top-k "${HW2_BONUS_TOP_K:-50}" \
+    --temperature "${HW2_BONUS_TEMPERATURE:-0.9}" \
+    --numeric-strategy "$hw2_numeric_strategy" \
+    --seed 2026 --output "$hw2_output/bonus"
+}
 
 case "${1:-help}" in
   prepare)
@@ -17,33 +91,37 @@ case "${1:-help}" in
     ;;
   train-basic|train-bonus)
     : "${CUDA_VISIBLE_DEVICES:?Set the authorized physical GPU index explicitly}"
+    resolve_source_commit
     task="${1#train-}"
     hw2_command train --config "configs/$task.json" --data "$hw2_data" --output "runs/$task"
     ;;
   final-basic|final-bonus)
     : "${CUDA_VISIBLE_DEVICES:?Set the authorized physical GPU index explicitly}"
-    : "${HW2_FINAL_STEPS:?Set the final-stage step count after assessing convergence}"
+    resolve_source_commit
     task="${1#final-}"
-    hw2_command train --config "configs/$task.json" --data "$hw2_data" \
-      --init-from "runs/$task" --all-training --steps "$HW2_FINAL_STEPS" \
-      --output "runs/$task-final"
+    if [[ "$task" == basic ]]; then
+      final_checkpoint="$hw2_basic"
+    else
+      final_checkpoint="$hw2_bonus"
+    fi
+    hw2_command train --config "configs/$task-full-corpus.json" --data "$hw2_data" \
+      --output "$final_checkpoint"
+    ;;
+  export-basic)
+    export_basic
+    ;;
+  export-bonus)
+    export_bonus
+    ;;
+  generate-basic)
+    generate_basic
+    ;;
+  generate-bonus)
+    generate_bonus
     ;;
   generate)
-    while read -r setting top_k temperature; do
-      hw2_command generate --checkpoint "$hw2_basic" --mode unconditional --count 20 --bars 32 \
-        --top-k "$top_k" --temperature "$temperature" --seed 2026 \
-        --output "$hw2_output/basic-a/$setting"
-      hw2_command generate --checkpoint "$hw2_basic" --mode continue \
-        --prompts POP909/prompts/basic-b --bars 24 --top-k "$top_k" \
-        --temperature "$temperature" --seed 2026 --output "$hw2_output/basic-b/$setting"
-    done <<'SETTINGS'
-A 20 0.9
-B 50 0.9
-C 50 1.1
-SETTINGS
-    hw2_command generate --checkpoint "$hw2_bonus" --mode accompany \
-      --prompts POP909/prompts/bonus --top-k 50 --temperature 0.9 --seed 2026 \
-      --output "$hw2_output/bonus"
+    generate_basic
+    generate_bonus
     ;;
   evaluate)
     hw2_command reference --data "$hw2_data" --output "$hw2_output/real"
@@ -71,7 +149,8 @@ SETTINGS
     ;;
   help)
     printf '%s\n' 'Stages: prepare, train-basic, train-bonus, final-basic, final-bonus,' \
-      '        generate, evaluate, render A|B|C' \
+      '        export-basic, export-bonus, generate-basic, generate-bonus, generate,' \
+      '        evaluate, render A|B|C' \
       'Commands are a reproduction plan, not evidence that experiments have run.'
     ;;
   *) printf 'Unknown stage: %s\n' "$1" >&2; exit 2 ;;

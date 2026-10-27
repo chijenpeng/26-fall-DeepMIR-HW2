@@ -1,9 +1,11 @@
 # Development workflow
 
-The author resumed formal training and experiments on 2026-10-26. Authorized GPUs
-are emma's physical GPUs 0/1 and loopy's physical GPU 1 only. Check existing jobs
-before launching; never interrupt other users' work. See docs/experiments.md for
-active runs. Repository CI remains synthetic and does not launch server GPU jobs.
+Formal final runs launched on 2026-10-27 from reviewed commit
+`63c4a55ba2962c95674eccbf687eec20c431279c`: Basic is on emma physical GPU 0 and
+Bonus is on emma physical GPU 1. Do not interrupt these jobs. Loopy physical GPU 1
+is reserved by the parent for numeric/EOS diagnosis; do not start training there.
+Check docs/experiments.md for the current launch plan and historical diagnostics.
+Repository CI remains synthetic and does not launch server GPU jobs.
 
 Use Python 3.12 and install `requirements-experiments.txt`. Keep modules focused on
 their documented responsibilities; use local JSON configs rather than hard-coded
