@@ -144,3 +144,16 @@ def test_t5_accompaniment_follows_prompt_bars():
     assert len(bars) == 3
     for bar, beats in zip(bars, [4, 2, 3], strict=True):
         assert all(int(remi.value(t)) < beats * 4 for t in bar if remi.kind(t) == "Pos")
+
+
+def test_bar_length_cap_ends_runaway_bars(monkeypatch):
+    monkeypatch.setattr("deepmir_hw2.generate.MAX_BAR_TOKENS", 40)
+    torch.manual_seed(0)
+    model = build_model(tiny("basic")).eval()  # untrained: rarely chooses Bar under top-k
+    grammar = Grammar(3, header=True)
+    tokens = continue_gpt2(
+        model, [remi.BOS], grammar, Sampling(1.0, 5), torch.Generator().manual_seed(0), max_len=64
+    )
+    bars = remi.split_bars(tokens)
+    assert len(bars) == 3 and all(len(b) <= 43 for b in bars)
+    assert grammar.capped >= 1
