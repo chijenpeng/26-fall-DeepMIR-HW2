@@ -1,50 +1,39 @@
-"""Randomly initialized Transformers; checkpoint loading is always local."""
+"""Randomly initialized Hugging Face Transformers (trained from scratch)."""
 
 from transformers import GPT2Config, GPT2LMHeadModel, T5Config, T5ForConditionalGeneration
 
-from .attention import use_chunked_t5_attention
-from .tokens import MusicTokenizer
+from . import remi
 
 
-def build_model(config: dict, tokenizer: MusicTokenizer):
-    model = config["model"]
+def build_model(config):
+    m = config["model"]
     common = {
-        "vocab_size": len(tokenizer),
-        "pad_token_id": tokenizer.pad_id,
-        "bos_token_id": tokenizer.bos_id,
-        "eos_token_id": tokenizer.eos_id,
+        "vocab_size": len(remi.VOCAB),
+        "pad_token_id": remi.PAD,
+        "bos_token_id": remi.BOS,
+        "eos_token_id": remi.EOS,
     }
-    width, heads = model["width"], model["heads"]
-    if width % heads:
-        raise ValueError("Model width must be divisible by number of heads")
     if config["task"] == "basic":
-        architecture = GPT2Config(
-            **common,
-            n_positions=config["data"]["max_tokens"],
-            n_ctx=config["data"]["max_tokens"],
-            n_embd=width,
-            n_layer=model["layers"],
-            n_head=heads,
-            resid_pdrop=model.get("dropout", 0.1),
-            embd_pdrop=model.get("dropout", 0.1),
-            attn_pdrop=model.get("dropout", 0.1),
-            use_cache=False,
+        return GPT2LMHeadModel(
+            GPT2Config(
+                **common,
+                n_positions=config["max_len"][0],
+                n_embd=m["width"],
+                n_layer=m["layers"],
+                n_head=m["heads"],
+                attn_implementation="sdpa",
+            )
         )
-        architecture._attn_implementation = "sdpa"
-        return GPT2LMHeadModel(architecture)
-    if config["task"] != "bonus":
-        raise ValueError("Task must be basic or bonus")
-    architecture = T5Config(
-        **common,
-        d_model=width,
-        d_kv=width // heads,
-        d_ff=width * 4,
-        num_layers=model["encoder_layers"],
-        num_decoder_layers=model["decoder_layers"],
-        num_heads=heads,
-        dropout_rate=model.get("dropout", 0.1),
-        decoder_start_token_id=tokenizer.bos_id,
-        use_cache=False,
-        query_block_size=model.get("query_block_size", 2048),
+    return T5ForConditionalGeneration(
+        T5Config(
+            **common,
+            d_model=m["width"],
+            d_kv=m["width"] // m["heads"],
+            d_ff=m["width"] * 4,
+            num_layers=m["encoder_layers"],
+            num_decoder_layers=m["decoder_layers"],
+            num_heads=m["heads"],
+            relative_attention_max_distance=256,
+            decoder_start_token_id=remi.BOS,
+        )
     )
-    return use_chunked_t5_attention(T5ForConditionalGeneration(architecture))

@@ -1,0 +1,24 @@
+{
+  "task": "basic",
+  "seed": 42,
+  "bars": 32,
+  "max_len": [
+    4096
+  ],
+  "transpose": 5,
+  "model": {
+    "width": 512,
+    "layers": 12,
+    "heads": 8
+  },
+  "training": {
+    "steps": 40000,
+    "batch_size": 2,
+    "accumulation": 8,
+    "learning_rate": 0.0003,
+    "warmup_steps": 500,
+    "log_every": 50,
+    "save_every": 2000
+  },
+  "chords": false
+}

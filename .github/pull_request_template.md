@@ -4,5 +4,4 @@ Describe the concrete problem and resulting behavior.
 
 ## Validation
 
-List checks actually run. Distinguish synthetic/smoke verification from full experiments.
-Link affected requirements in `docs/requirements.md` when relevant.
+List checks actually run. Distinguish unit tests from real-model experiments.

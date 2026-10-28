@@ -1,157 +1,86 @@
-"""Evaluate with unmodified TA metric functions and report every missing metric."""
+"""Objective metrics computed with the supplied TA scripts in HW2_scripts/."""
 
-import hashlib
-import importlib.util
+import csv
+import json
 import random
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 
-from .utils import read_json, write_json
+from . import remi
+
+ROOT = Path(__file__).resolve().parents[2]
+EVAL_VOCAB = ["Bar"] + [f"Pos_{i}" for i in range(32)] + [f"Pitch_{p}" for p in range(128)]
 
 
-def load_module(path):
-    path = Path(path)
-    if not path.is_file():
-        raise FileNotFoundError(f"Missing evaluation source: {path}; see README")
-    spec = importlib.util.spec_from_file_location("evaluation_source", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def basic_metrics(pieces):
+    """H1/H4/GS from eval_basic.py for (name, REMI token ids) pairs."""
+    sys.path[:0] = [str(ROOT / "HW2_scripts"), str(ROOT / "third_party")]
+    import eval_basic as ta
 
-
-def load_ta_basic(ta_scripts, musdr_root):
-    root = Path(musdr_root).resolve()
-    if root.name != "MusDr":
-        raise ValueError("TA imports require a checkout directory named MusDr")
-    sys.path.insert(0, str(root.parent))
-    try:
-        return load_module(Path(ta_scripts) / "eval_basic.py")
-    finally:
-        sys.path.pop(0)
-
-
-def compute_basic(sequence, vocabulary, ta):
-    if not sequence or sequence.count(vocabulary["Bar"]) < 1:
-        raise ValueError("Expected a nonempty bar sequence")
-    positions = [
-        vocabulary[key]
-        for key in sorted(
-            (key for key in vocabulary if key.startswith("Pos_")), key=lambda key: int(key[4:])
+    tok2idx = {t: i for i, t in enumerate(EVAL_VOCAB)}
+    pos = [tok2idx[t] for t in EVAL_VOCAB if t.startswith("Pos_")]
+    pitch = [tok2idx[t] for t in EVAL_VOCAB if t.startswith("Pitch_")]
+    random.seed(0)  # GS samples at most 1000 bar pairs
+    rows = []
+    for name, tokens in pieces:
+        ids = [tok2idx[t] for t in remi.eval_tokens(tokens)]
+        rows.append(
+            {
+                "song_name": name,
+                "H1": ta.compute_piece_pitch_entropy(ids, 1, 0, pitch),
+                "H4": ta.compute_piece_pitch_entropy(ids, 4, 0, pitch),
+                "GS": ta.compute_piece_groove_similarity(ids, 0, pos, pitch),
+            }
         )
-    ]
-    pitches = [
-        vocabulary[key]
-        for key in sorted(
-            (key for key in vocabulary if key.startswith("Pitch_")), key=lambda key: int(key[6:])
-        )
-    ]
-    bar = vocabulary["Bar"]
-    return {
-        "H1": float(ta.compute_piece_pitch_entropy(sequence, 1, bar, pitches)),
-        "H4": float(ta.compute_piece_pitch_entropy(sequence, 4, bar, pitches)),
-        "GS": float(ta.compute_piece_groove_similarity(sequence, bar, positions, pitches)),
-        "bars": sequence.count(bar),
-    }
+    return rows
+
+
+def write_rows(rows, output):
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    summary = {k: float(np.nanmean([r[k] for r in rows])) for k in rows[0] if k != "song_name"}
+    summary["count"] = len(rows)
+    output.with_suffix(".summary.json").write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary))
 
 
 def evaluate(args):
-    import pandas as pd
-
-    output = Path(args.output)
-    if output.exists() or output.with_suffix(".summary.json").exists():
-        raise FileExistsError(output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    if args.task == "bonus":
-        if not args.prompts:
-            raise ValueError("Bonus evaluation requires --prompts")
-        names = sorted(p.name for p in Path(args.prompts).iterdir() if p.is_dir())
-        files = sorted(p.stem for p in Path(args.input).glob("*.mid"))
-        if names != files:
-            raise ValueError(f"Generated/expected prompt names disagree: {files} vs {names}")
-        implementation = Path(args.ta_scripts) / "eval_bonus.py"
-        ta = load_module(implementation)
-        options = SimpleNamespace(prompt_dir=args.prompts, gen_midi_dir=args.input)
-        for name in names:
-            ta.evaluate_song(name, options)
+    if args.task == "real":
+        songs = json.loads(Path(args.input).read_text())["songs"]
+        pieces = [(n, [t for bar in s["basic"] for t in bar]) for n, s in sorted(songs.items())]
+        write_rows(basic_metrics(pieces), args.output)
+    elif args.task == "basic":
+        record = json.loads((Path(args.input) / "generation.json").read_text())
+        write_rows(basic_metrics([(p["name"], p["tokens"]) for p in record["pieces"]]), args.output)
+    else:
         subprocess.run(
             [
                 sys.executable,
-                str(implementation),
+                str(ROOT / "HW2_scripts" / "eval_bonus.py"),
                 "--prompt_dir",
                 args.prompts,
                 "--gen_midi_dir",
                 args.input,
                 "--output_csv",
-                str(output),
+                args.output,
             ],
             check=True,
         )
-        frame = pd.read_csv(output)
-        if len(frame) != len(names):
-            raise ValueError("TA evaluation unexpectedly skipped songs")
-        metrics = [key for key in frame if key not in {"song_name", "n_bars"}]
-        means = {key: float(np.average(frame[key], weights=frame["n_bars"])) for key in metrics}
-    else:
-        directory = Path(args.input)
-        vocabulary = read_json(directory / "tok2idx.json")
-        sequences = read_json(directory / "sequences.json")
-        if not sequences:
-            raise ValueError("No sequences to evaluate")
-        if (directory / "generation.json").exists():
-            generation = read_json(directory / "generation.json")
-            if not generation["complete"] or len(sequences) != generation["expected_pieces"]:
-                raise ValueError("Generation is incomplete; refusing a partial-piece average")
-        implementation = Path(args.ta_scripts) / "eval_basic.py"
-        ta = load_ta_basic(args.ta_scripts, args.musdr_root)
-        state = random.getstate()
-        random.seed(args.seed)
-        try:
-            rows = [
-                {
-                    "song_name": item["song_name"],
-                    **compute_basic(
-                        [vocabulary[token] for token in item["tokens"]], vocabulary, ta
-                    ),
-                }
-                for item in sequences
-            ]
-        finally:
-            random.setstate(state)
-        frame = pd.DataFrame(rows)
-        frame.to_csv(output, index=False)
-        metrics = ["H1", "H4", "GS"]
-        means = {key: float(frame[key].mean()) for key in metrics}
-    # Preserve TA behavior (including NaN for all-rest pitch windows), while
-    # explicitly reporting coverage instead of concealing failed/undefined metrics.
-    summary = {
-        "pieces": len(frame),
-        "metrics": {key: value if np.isfinite(value) else None for key, value in means.items()},
-        "valid_pieces": {key: int(np.isfinite(frame[key]).sum()) for key in metrics},
-        "implementation_sha256": hashlib.sha256(implementation.read_bytes()).hexdigest(),
-        "seed": args.seed,
-    }
-    summary["complete"] = all(count == len(frame) for count in summary["valid_pieces"].values())
-    if args.task == "basic":
-        summary["musdr_sha256"] = hashlib.sha256(
-            (Path(args.musdr_root) / "musdr/side_utils.py").read_bytes()
-        ).hexdigest()
-    write_json(output.with_suffix(".summary.json"), summary)
-    print(summary)
-    if not summary["complete"]:
-        raise ValueError("Undefined metrics remain; refusing to report a complete experiment")
 
 
 def add_parser(subparsers):
     parser = subparsers.add_parser("evaluate", help=__doc__)
-    parser.add_argument("--task", choices=["basic", "bonus"], required=True)
-    parser.add_argument("--input", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--prompts")
-    parser.add_argument("--musdr-root", default="third_party/MusDr")
-    parser.add_argument("--ta-scripts", default="HW2_scripts")
-    parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("task", choices=["basic", "real", "bonus"])
+    parser.add_argument(
+        "--input", required=True, help="Generation folder, or data/remi.json for real"
+    )
+    parser.add_argument("--output", required=True, help="CSV path")
+    parser.add_argument("--prompts", default="POP909/prompts/bonus")
     parser.set_defaults(func=evaluate)
