@@ -1,5 +1,12 @@
 # Assignment coverage audit
 
+**Current state (2026-10-28):** this table records the earlier implementation
+audit and its original pending items. Formal Basic training has since completed;
+Bonus training remains active; no full set of required generated outputs is
+verified. Use [HANDOFF.md](../HANDOFF.md) and
+[issue #5](https://github.com/chijenpeng/26-fall-DeepMIR-HW2/issues/5) for live
+handoff status and actual failures.
+
 Source: supplied Homework_2.pdf (38 pages), not redistributed here.
 Deadline: 2026-10-29 23:59 Asia/Taipei. Formal work resumed on 2026-10-26.
 

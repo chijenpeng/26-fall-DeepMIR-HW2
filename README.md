@@ -2,16 +2,14 @@
 
 Chi-Jen Peng (R14725022)
 
-**Status (2026-10-27):** both formal final runs have been launched from reviewed
-commit `63c4a55ba2962c95674eccbf687eec20c431279c`, from random initialization over
-all 896 songs with no validation split. Basic runs on emma GPU 0 (9,000 steps,
-learning rate 2e-4); Bonus Option B runs on emma GPU 1 (12,000 steps, learning rate
-3e-4). Completion, per-song exposure checks, final generation, evaluations, listening
-selection, report, and delivery remain pending. Final-bar EOS/numeric generation
-behavior remains under diagnosis; synthetic tests have not resolved it. The earlier
-851/45 development runs and their samples are diagnostics only. See the
-[run record](docs/experiments.md)
-for historical evidence, launch details, and final-stage checks.
+**Current status and Claude handoff (2026-10-28):** read [HANDOFF.md](HANDOFF.md)
+and [GitHub issue #5](https://github.com/chijenpeng/26-fall-DeepMIR-HW2/issues/5)
+before launching anything. Formal Basic training is complete and its final export
+passed provenance checks; formal Bonus training is still active. Required final
+generation, evaluation, listening, and packaging are incomplete. Earlier 851/45
+development weights and samples are diagnostics only. The student writes the report,
+uploads the cloud link, and handles NTU COOL submission. The
+[run record](docs/experiments.md) contains historical evidence.
 
 See [module guide](docs/architecture.md), [assignment checklist](docs/requirements.md)
 and [source attribution](THIRD_PARTY.md).
