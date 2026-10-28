@@ -15,6 +15,7 @@ KIND_IDS = {
     k: [i for i in range(len(remi.VOCAB)) if remi.kind(i) == k]
     for k in ["Bar", "Beat", "Tempo", "Pos", "Chord", "Pitch", "Vel", "Dur"]
 }
+MAX_BAR_TOKENS = 680  # the longest bar in the prepared training data has 677 tokens
 
 
 @dataclass
@@ -35,16 +36,21 @@ class Grammar:
     """Masks tokens that would break REMI syntax and ends after exactly `bars` bars.
 
     `beats` gives fixed beat counts per bar (accompaniment); otherwise the model's
-    own Beat token sets the number of legal positions in each bar.
+    own Beat token sets the number of legal positions in each bar. A bar reaching
+    MAX_BAR_TOKENS must end; `capped` counts such bars.
     """
 
     def __init__(self, bars, header, beats=None, chords=True):
         self.bars, self.header, self.beats, self.chords = bars, header, beats, chords
         self.count, self.previous, self.pos, self.bar_beats = 0, "<BOS>", -1, 4
-        self.done = False
+        self.done, self.bar_tokens, self.capped = False, 0, 0
 
     def feed(self, token):
         k = remi.kind(token)
+        if k in ("Bar", "<EOS>"):
+            self.capped += self.bar_tokens >= MAX_BAR_TOKENS
+            self.bar_tokens = 0
+        self.bar_tokens += 1
         if k == "Bar":
             if self.count == self.bars:
                 self.done = True
@@ -79,6 +85,8 @@ class Grammar:
         # After a header, Chord or Dur: another note here, a later position, or a new bar.
         # A Bar after the last requested bar, or EOS, finishes the piece.
         kinds = ["Pos", "Bar"] + ([] if p in ("Bar", "Tempo") else ["Pitch"])
+        if self.bar_tokens >= MAX_BAR_TOKENS:
+            kinds = ["Bar"]
         return kinds, [remi.EOS] if self.count == self.bars else []
 
     def mask(self, size, device):
@@ -118,8 +126,6 @@ def continue_gpt2(model, prefix, grammar, sampling, generator, max_len):
         grammar.feed(t)
     past, cached = None, 0
     while not grammar.done:
-        if len(tokens) > 400 * grammar.bars:
-            raise RuntimeError("Generation is not advancing through bars")
         if past is None or cached >= max_len:
             window = tokens
             if past is not None:  # context full: restart from bars in the last half window
@@ -185,11 +191,19 @@ def generate(args):
     output.mkdir(parents=True, exist_ok=True)
     records = []
 
-    def finish(name, instruments, tokens, seed):
+    def finish(name, instruments, tokens, seed, grammar):
         path = output / f"{name}.mid"
         write_midi(path, instruments)
         notes = sum(len(i.notes) for i in instruments)
-        records.append({"name": name, "seed": seed, "notes": notes, "tokens": tokens})
+        records.append(
+            {
+                "name": name,
+                "seed": seed,
+                "notes": notes,
+                "capped_bars": grammar.capped,
+                "tokens": tokens,
+            }
+        )
         print(f"{path}: {notes} notes", flush=True)
         if args.soundfont:
             render_wav(path, path.with_suffix(".wav"), args.soundfont)
@@ -200,7 +214,7 @@ def generate(args):
             generator = torch.Generator().manual_seed(seed)
             grammar = Grammar(args.bars, header=True, chords=use_chords)
             tokens = continue_gpt2(model, [remi.BOS], grammar, sampling, generator, max_len[0])
-            finish(f"{i + 1:03d}", [remi.decode(tokens)], tokens, seed)
+            finish(f"{i + 1:03d}", [remi.decode(tokens)], tokens, seed, grammar)
     elif args.mode == "continue":
         for i, folder in enumerate(prompt_folders(args.prompts)):
             seed = args.seed + i
@@ -216,7 +230,7 @@ def generate(args):
             continuation = remi.decode(
                 tokens[len(prefix) :], start=float(grid.beats[-1]), name="CONTINUATION"
             )
-            finish(folder.name, [*midi.instruments, continuation], tokens, seed)
+            finish(folder.name, [*midi.instruments, continuation], tokens, seed, grammar)
     else:
         for i, folder in enumerate(prompt_folders(args.prompts)):
             seed = args.seed + i
@@ -227,7 +241,7 @@ def generate(args):
             grammar = Grammar(grid.n_bars, header=False, beats=grid.beat_counts())
             tokens = accompany_t5(model, source, grammar, sampling, generator, max_len)
             melody.name = "MELODY"
-            finish(folder.name, [melody, remi.decode(tokens, grid=grid)], tokens, seed)
+            finish(folder.name, [melody, remi.decode(tokens, grid=grid)], tokens, seed, grammar)
 
     summary = {
         "checkpoint": str(args.checkpoint),
