@@ -12,12 +12,12 @@
     "heads": 8
   },
   "training": {
-    "steps": 40000,
+    "steps": 6000,
     "batch_size": 4,
     "accumulation": 4,
     "learning_rate": 0.0003,
     "warmup_steps": 500,
     "log_every": 50,
-    "save_every": 2000
+    "save_every": 1000
   }
 }
