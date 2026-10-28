@@ -1,5 +1,11 @@
 # Training and experiment record
 
+**Current state (2026-10-28):** this dated experiment history does not track live
+processes. Use [HANDOFF.md](../HANDOFF.md) and
+[issue #5](https://github.com/chijenpeng/26-fall-DeepMIR-HW2/issues/5) for the
+completed Basic run, active Bonus run, failed final-weight generation batches,
+and the remaining work.
+
 Updated 2026-10-27 (Asia/Taipei). This is an execution record, not final
 music-quality results. Source preparation is complete, but final-stage checkpoints
 have not yet been validated and all generated deliverables and the report remain
