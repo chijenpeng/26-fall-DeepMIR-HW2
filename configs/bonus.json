@@ -1,35 +1,25 @@
 {
   "task": "bonus",
   "seed": 42,
+  "bars": 16,
+  "max_len": [
+    1024,
+    2048
+  ],
+  "transpose": 5,
   "model": {
     "width": 512,
-    "encoder_layers": 4,
+    "encoder_layers": 6,
     "decoder_layers": 6,
-    "heads": 8,
-    "query_block_size": 2048,
-    "dropout": 0.1
-  },
-  "data": {
-    "bars": 16,
-    "max_tokens": "auto",
-    "validation_fraction": 0.05,
-    "transpose": 5
+    "heads": 8
   },
   "training": {
-    "steps": 12000,
-    "batch_size": 1,
-    "gradient_accumulation": 16,
+    "steps": 80000,
+    "batch_size": 2,
+    "accumulation": 8,
     "learning_rate": 0.0003,
-    "weight_decay": 0.01,
     "warmup_steps": 500,
-    "min_lr_ratio": 0.1,
-    "gradient_clip": 1.0,
-    "precision": "bf16",
-    "gradient_checkpointing": true,
-    "log_every": 20,
-    "evaluate_every": 500,
-    "checkpoint_every": 1000,
-    "validation_batches": 16,
-    "keep_checkpoints": 3
+    "log_every": 50,
+    "save_every": 4000
   }
 }
