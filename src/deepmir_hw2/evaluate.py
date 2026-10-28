@@ -73,6 +73,13 @@ def evaluate(args):
             ],
             check=True,
         )
+        # Same bar-weighted pooling as the averages eval_bonus.py prints.
+        rows = list(csv.DictReader(open(args.output)))
+        bars = sum(int(r["n_bars"]) for r in rows)
+        metrics = [k for k in rows[0] if k not in ("song_name", "n_bars")]
+        summary = {k: sum(float(r[k]) * int(r["n_bars"]) for r in rows) / bars for k in metrics}
+        summary["count"] = len(rows)
+        Path(args.output).with_suffix(".summary.json").write_text(json.dumps(summary, indent=2))
 
 
 def add_parser(subparsers):

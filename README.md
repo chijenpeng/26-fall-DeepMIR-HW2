@@ -56,6 +56,19 @@ Sampling options: `--temperature`, `--top-k` (0 = off), `--top-p` (1.0 = off),
 `--seed` (piece *i* uses `seed + i`). Use `--device cpu` to force CPU; a GPU is
 optional for inference.
 
+The three compared inference settings are A = top-k 20, T 0.9; B = top-p 0.9, T 1.0;
+C = top-k 50, T 1.2 (seeds 2026, 2027, ...). `scripts/final_outputs.sh` regenerates
+every submitted batch with them:
+
+```bash
+bash scripts/final_outputs.sh basic-a   # 3 settings x 20 unconditional pieces
+bash scripts/final_outputs.sh basic-b   # 3 settings x 3 continuations
+bash scripts/final_outputs.sh bonus     # 3 settings x 10 accompaniments
+bash scripts/final_outputs.sh no-chord  # ablation model, setting A
+SF=$SF bash scripts/final_outputs.sh render
+bash scripts/final_outputs.sh metrics
+```
+
 ## Training and evaluation (reproduction)
 
 ```bash
