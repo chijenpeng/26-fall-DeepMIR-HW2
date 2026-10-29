@@ -29,6 +29,21 @@ brew install fluid-synth                             # macOS (download a .sf2 se
 
 The submitted WAVs use TimGM6mb (`/usr/share/sounds/sf2/TimGM6mb.sf2` on Debian).
 
+## Data
+
+The course POP909 data is not included. Put it at the repository root as `POP909/` (the
+default paths below), or pass its location with `--prompts` / `--dataset`:
+
+```
+POP909/
+  training/<id>/{<id>.mid, beat_midi.txt, chord_midi.txt}        896 songs, training only
+  prompts/basic-b/<id>/{<id>.mid, beat_midi.txt, chord_midi.txt}  Basic B prompts (001-003)
+  prompts/bonus/<id>/{melody.mid, beat_midi.txt, ...}              Bonus prompts (001-010)
+```
+
+Inference needs only `prompts/`; Basic A needs no data at all. Other files in a prompt
+folder (e.g. `piano.mid`) are ignored by inference.
+
 ## Checkpoints and generated results
 
 The checkpoints and the submitted listening samples are too large for git and are attached
@@ -56,10 +71,8 @@ Checkpoints: `models/basic.pt` (Basic A/B), `models/bonus.pt` (Bonus). Every com
 writes `NNN.mid`, `NNN.wav` (when `--soundfont` is given) and `generation.json`
 (seeds, settings, tokens) into `--output`. Drop `--soundfont` to write MIDI only.
 
-`--prompts` is the TA prompt folder with one subfolder per prompt:
-`basic-b/<id>/{<id>.mid, beat_midi.txt, chord_midi.txt}` and
-`bonus/<id>/{melody.mid, beat_midi.txt}` (other files are ignored). Output files are named
-after the prompt folders.
+`--prompts` is a folder with one subfolder per prompt (see [Data](#data)); output files are
+named after the prompt folders.
 
 ```bash
 SF=/usr/share/sounds/sf2/TimGM6mb.sf2
@@ -82,6 +95,10 @@ python -m deepmir_hw2 generate --checkpoint models/bonus.pt --mode accompany \
 Sampling options: `--temperature`, `--top-k` (0 = off), `--top-p` (1.0 = off),
 `--seed` (piece *i* uses `seed + i`). Use `--device cpu` to force CPU; a GPU is
 optional for inference.
+
+**Verified:** in a fresh clone with Python 3.12, `pip install -r requirements.txt` and the
+checkpoints downloaded from the release, these commands on the CPU reproduce the submitted
+`basic-a/001.mid` and `bonus/001.mid` note for note (the submitted files were generated on a GPU).
 
 The three compared inference settings are A = top-k 20, T 0.9; B = top-p 0.9, T 1.0;
 C = top-k 50, T 1.2 (seeds 2026, 2027, ...). `scripts/final_outputs.sh` regenerates
