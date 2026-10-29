@@ -15,10 +15,6 @@ dependencies = [
   "tqdm>=4.66,<5",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest>=8,<9", "ruff>=0.11,<1"]
-evaluation = ["scipy>=1.11,<2", "pandas>=2.2,<3"]
-
 [project.scripts]
 deepmir = "deepmir_hw2.cli:main"
 
