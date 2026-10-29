@@ -122,7 +122,12 @@ requested number of bars. Sampling uses temperature / top-k / top-p on the legal
 src/deepmir_hw2/   remi.py (tokens), prepare.py, data.py, models.py, train.py,
                    generate.py, evaluate.py, render.py, cli.py
 configs/           training configurations
+scripts/           final_outputs.sh (all submitted batches, WAV rendering, metrics)
 HW2_scripts/       TA-provided tokenizer example and metric scripts (unmodified)
+notes/             assignment PDF and experiment log (experiments.md)
+results/           metric summaries used in the report
+slides/            16:9 report (XeLaTeX beamer; `latexmk` writes submission/)
+submission/        r14725022_report.pdf
 tests/             CPU unit tests (pytest)
 ```
 
