@@ -1,0 +1,147 @@
+% !TEX program = xelatex
+% DeepMIR HW2 report slides. Build: latexmk -xelatex main.tex   (16:9, theme = Moloch, the maintained Metropolis)
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme[progressbar=frametitle]{moloch}        % swap for metropolis / focus / Arguelles to change the look
+
+% ---------- fonts: Fira Sans (ships with TeX Live) + PingFang TC for Chinese ----------
+\usepackage{fontspec}
+\setsansfont{FiraSans}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-SemiBold, ItalicFont=*-Italic, BoldItalicFont=*-SemiBoldItalic]
+\setmonofont{FiraMono}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-Bold, Scale=0.9]
+\usepackage{xeCJK}
+\setCJKmainfont{PingFangTC-Regular}[BoldFont=PingFangTC-Semibold]
+\setCJKsansfont{PingFangTC-Regular}[BoldFont=PingFangTC-Semibold]
+\setCJKmonofont{PingFangTC-Regular}
+
+% ---------- packages ----------
+\usepackage{booktabs, graphicx, array, multirow}
+\usepackage{appendixnumberbeamer}
+\graphicspath{{figs/}{../results/}}
+\hypersetup{colorlinks=true, urlcolor=orange!80!black, linkcolor=.}
+
+% ---------- helpers ----------
+\newcommand{\best}[1]{\textbf{\alert{#1}}}                       % highlight the best number in a table
+\newcommand{\fig}[2][0.78\textheight]{\includegraphics[height=#1,keepaspectratio]{#2}}
+\usetikzlibrary{positioning, arrows.meta, calc}
+\tikzset{
+  blk/.style={draw=black!35, rounded corners=2pt, align=center, font=\scriptsize, inner sep=3.5pt, minimum height=1.0cm},
+  io/.style={blk, fill=white},
+  op/.style={blk, fill=black!5},
+  train/.style={blk, fill=orange!22, draw=orange!75!black, thick},
+  arr/.style={-{Stealth[length=4.5pt]}, semithick, black!65},
+}
+\newenvironment{tight}{\begin{itemize}\setlength{\itemsep}{1.5pt}\setlength{\parskip}{0pt}\setlength{\topsep}{0pt}}{\end{itemize}}
+\newcommand{\src}[1]{\vfill{\scriptsize\color{gray}#1}}          % small source / setting note at the bottom of a slide
+\newcommand{\todo}[1]{{\color{red}\textbf{TODO:} #1}}
+
+\title{Symbolic Music Generation with REMI Transformers}
+\subtitle{DeepMIR 2026 Fall --- Homework 2}
+\author{Chi-Jen Peng \quad (R14725022)}
+\institute{Code, README, checkpoints, generated samples: \todo{cloud link}\\[0.3em]
+Repository: \url{https://github.com/chijenpeng/26-fall-DeepMIR-HW2}}
+\date{October 29, 2026}
+
+\begin{document}
+\maketitle
+
+% =====================================================================
+\section{Experimental Setting}
+\begin{frame}{Experimental setting}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \textbf{Tasks}
+      \begin{tight}
+        \item Basic A: unconditional 32-bar generation, 3 inference settings $\times$ 20 pieces
+        \item Basic B: 24-bar continuation of 3 TA prompts (8 bars), 3 settings
+        \item Bonus (Option B): piano accompaniment for 10 melody prompts (16 bars)
+        \item Data: all 896 POP909 training songs, no other data; models trained from scratch
+      \end{tight}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \textbf{Hardware / software}\\[0.3em]
+      {\small
+      \begin{tabular}{@{}ll@{}}
+        \toprule
+        GPU & 2 $\times$ RTX 4070 SUPER (12 GB),\\ & 1 $\times$ RTX A4500 (20 GB) \\
+        OS & Ubuntu 26.04 \\
+        Software & PyTorch 2.8, Transformers 4.57.1,\\ & pretty\_midi 0.2.11, FluidSynth \\
+        \bottomrule
+      \end{tabular}}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =====================================================================
+\section{Method}
+\begin{frame}[t]{Token representation: REMI on the annotated beat grid}
+  % TODO: example token sequence figure / table
+  \begin{tight}
+    \item Bars start at the downbeats in \texttt{beat\_midi.txt}; each bar: \texttt{Bar Beat\_n Tempo\_t}
+    \item Events: \texttt{Pos\_p} (16th note, 4 per beat) \texttt{[Chord\_root:quality]} \texttt{Pitch Vel Dur}
+    \item Vocabulary: 430 tokens; 32 bars: median 2{,}431 tokens, p99 3{,}900
+    \item \todo{chords, velocity / duration bins, Basic vs.\ Bonus tracks}
+  \end{tight}
+\end{frame}
+
+\begin{frame}[t]{Models and training}
+  \todo{GPT-2 (Basic) and T5 (Bonus) architecture, hyper-parameters, augmentation}
+\end{frame}
+
+\begin{frame}[t]{Training length: held-out loss}
+  \todo{held-out loss vs.\ step (13 prompt songs), choice of checkpoints}
+\end{frame}
+
+% =====================================================================
+\section{Basic Task A: Unconditional Generation}
+\begin{frame}[t]{Basic A: inference settings and objective metrics}
+  \centering\small
+  \begin{tabular}{@{}lllcccccc@{}}
+    \toprule
+    Model & Repr. & w/ Chord & Top-K / Top-P & Temp. & H1 & H4 & GS \\
+    \midrule
+    GPT-2 & REMI & O & K = 20 & 0.9 & -- & -- & -- \\
+    GPT-2 & REMI & O & P = 0.9 & 1.0 & -- & -- & -- \\
+    GPT-2 & REMI & O & K = 50 & 1.2 & -- & -- & -- \\
+    GPT-2 & REMI & X & K = 20 & 0.9 & -- & -- & -- \\
+    \midrule
+    \multicolumn{5}{c}{Real data (896 songs)} & 2.123 & 2.626 & 0.877 \\
+    \bottomrule
+  \end{tabular}
+  \src{20 pieces $\times$ 32 bars per row; metrics from the TA \texttt{eval\_basic.py} (MusDr).}
+\end{frame}
+
+% =====================================================================
+\section{Basic Task B: Prompt Continuation}
+\begin{frame}[t]{Basic B: continuation of the three prompts}
+  \todo{settings, best setting per prompt (listening)}
+\end{frame}
+
+% =====================================================================
+\section{Bonus: Accompaniment Generation}
+\begin{frame}[t]{Bonus: melody $\rightarrow$ piano with T5}
+  \todo{model, inference, CA / OA table}
+\end{frame}
+
+% =====================================================================
+\section{Discussion}
+\begin{frame}[t]{Discussion and limitations}
+  \todo{findings}
+\end{frame}
+
+% =====================================================================
+\section{References}
+\begin{frame}[t]{References}
+  \footnotesize
+  \begin{tight}\footnotesize
+    \item \textbf{POP909}: Z.~Wang et al., ``POP909: A Pop-song Dataset for Music Arrangement Generation,'' ISMIR 2020
+    \item \textbf{REMI}: Y.-S.~Huang, Y.-H.~Yang, ``Pop Music Transformer,'' ACM MM 2020
+    \item \textbf{MusDr} metrics: S.-L.~Wu, Y.-H.~Yang, ``The Jazz Transformer on the Front Line,'' ISMIR 2020
+    \item \textbf{Bonus metrics}: Y.~Ren et al., ``PopMAG: Pop Music Accompaniment Generation,'' ACM MM 2020
+    \item \textbf{GPT-2}: A.~Radford et al., 2019. \quad \textbf{T5}: C.~Raffel et al., JMLR 2020
+    \item Hugging Face Transformers: T.~Wolf et al., EMNLP 2020. \quad PyTorch: A.~Paszke et al., NeurIPS 2019
+    \item TA scripts (\texttt{tokenization.py}, \texttt{eval\_basic.py}, \texttt{eval\_bonus.py}); TimGM6mb SoundFont (GPL-2)
+  \end{tight}
+  \vspace{0.5em}
+  \textbf{Tool}: Claude Code (Anthropic), OpenAI Codex.
+\end{frame}
+
+\end{document}
