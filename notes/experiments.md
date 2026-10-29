@@ -88,7 +88,58 @@ Bonus checkpoints, sampled with top-k 20 and T 0.9:
 | 1k | 0.08 | 0.79 | 0.58 |
 | 4k | 0.14 | 0.85 | 0.69 |
 
-## Final outputs
+## Final outputs (2026-10-29, `scripts/final_outputs.sh`)
 
-Final outputs are produced by `scripts/final_outputs.sh` with the selected checkpoints.
-Results: see `results/`.
+Settings: A = top-k 20, T 0.9; B = top-p 0.9, T 1.0; C = top-k 50, T 1.2. Piece *i* uses seed 2026 + *i*.
+Every piece has exactly the requested number of bars, and no bar hit the 680-token cap.
+
+### Basic A (20 pieces × 32 bars per row, `results/basic-a-*`)
+
+| model | chord | setting | H1 | H4 | GS |
+|---|---|---|---|---|---|
+| GPT-2 REMI | O | A | 2.197 | **2.604** | **0.909** |
+| GPT-2 REMI | O | B | 2.212 | 2.557 | 0.947 |
+| GPT-2 REMI | O | C | 2.326 | 2.801 | 0.849 |
+| GPT-2 REMI | X | A | 2.146 | 2.550 | 0.943 |
+| real data | | | 2.123 | 2.626 | 0.877 |
+
+Setting A is closest to the real data, so it is the submitted listening set.
+
+### Basic B (continuation only, bars 9–32)
+
+| prompt | setting | notes | tempo (prompt → continuation) | H4 | GS |
+|---|---|---|---|---|---|
+| 001 | A | 433 | 63 → 63 | 2.63 | 0.91 |
+| 001 | B | 387 | 63 → 63 | 2.53 | 0.93 |
+| 001 | C | 559 | 63 → 51–63 | 2.70 | 0.82 |
+| 002 | A | 443 | 108 → 108 | 2.64 | 0.95 |
+| 002 | B | 445 | 108 → 108 | 2.61 | 0.94 |
+| 002 | C | 458 | 108 → 108 | 2.89 | 0.87 |
+| 003 | A | 851 | 69 → 69 | 2.62 | 0.95 |
+| 003 | B | 669 | 69 → 69 | 2.64 | 0.91 |
+| 003 | C | 724 | 69 → 69 | 2.75 | 0.86 |
+
+The best continuation for each prompt is chosen by listening.
+
+### Bonus (10 prompts, `eval_bonus.py`, bar-weighted)
+
+| setting | CA | OA pitch | OA velocity | OA duration | OA IOI |
+|---|---|---|---|---|---|
+| A (submitted) | 0.150 | 0.844 | **0.597** | 0.695 | **0.609** |
+| B | 0.156 | 0.850 | 0.556 | 0.674 | 0.561 |
+| C | 0.106 | 0.843 | 0.541 | 0.681 | 0.576 |
+| D: top-k 5, T 0.7 | 0.150 | **0.851** | 0.567 | 0.729 | 0.578 |
+| E: top-k 3, T 0.5 | **0.163** | 0.849 | 0.568 | **0.736** | 0.572 |
+| GT piano (ceiling) | 0.763 | | | | |
+
+CA barely changes with the checkpoint. With setting A:
+
+| checkpoint | CA |
+|---|---|
+| long 12k (selected) | 0.150 |
+| short 14k | 0.150 |
+| long 28k | 0.175 |
+
+The generated piano register is close to the ground truth (median pitch 51–61 vs 56–65).
+The low CA therefore reflects a weak melody → harmony mapping learned from 896 songs; it
+is not caused by misalignment, since the GT round trip gives CA 0.750.
