@@ -53,7 +53,7 @@ none of which are used for training:
 | 16k | 2.424 | – | | 60k | 2.138 |
 | | | 2.557 (18k), 2.850 (22k) | | 68k | 2.240 |
 
-Training loss at the same time was 0.10–0.18, so the models were memorizing the training songs.
+Training loss at the same time kept falling, to 0.10–0.18.
 
 The runs were then restarted with short schedules: 6k steps for Basic and no-chord,
 14k for Bonus, keeping the same seed and hyper-parameters.
@@ -63,6 +63,8 @@ The runs were then restarted with short schedules: 6k steps for Basic and no-cho
 | Basic | 3k 1.358, 4k 1.323, **5k 1.308**, 6k 1.322 | 4k 1.315 | short 5k |
 | Basic no-chord | 3k 1.354, 4k 1.319, **5k 1.301**, 6k 1.305 | 6k 1.392 | short 5k |
 | Bonus | 6k 1.125, 8k 1.097, 10k 1.095, 12k 1.110, 14k 1.141 | **12k 1.076** | long 12k |
+
+Training loss of the selected Basic checkpoints (mean of the logged steps 4.8k–5k): 1.043 with chords, 1.051 without.
 
 Selected checkpoints (`models/`, SHA-256):
 
@@ -103,7 +105,7 @@ Every piece has exactly the requested number of bars, and no bar hit the 680-tok
 | GPT-2 REMI | X | A | 2.146 | 2.550 | 0.943 |
 | real data | | | 2.123 | 2.626 | 0.877 |
 
-Setting A is closest to the real data, so it is the submitted listening set.
+Setting A is closest on H4 and has the smallest total distance |ΔH4| + |ΔGS| (A 0.054, B 0.139, C 0.203, no-chord 0.142); C is marginally closer on GS alone (0.028 vs 0.032). A is the submitted listening set.
 
 ### Basic B (continuation only, bars 9–32)
 
@@ -119,7 +121,9 @@ Setting A is closest to the real data, so it is the submitted listening set.
 | 003 | B | 669 | 69 → 69 | 2.64 | 0.91 |
 | 003 | C | 724 | 69 → 69 | 2.75 | 0.86 |
 
-The best continuation for each prompt is chosen by listening.
+By listening, all three settings sound equally good for every prompt. Setting A is named
+the best for all three prompts, consistent with Basic A. (The assignment asks for no
+objective metrics here; the H4/GS above are for reference only.)
 
 ### Bonus (10 prompts, `eval_bonus.py`, bar-weighted)
 

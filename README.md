@@ -28,6 +28,26 @@ brew install fluid-synth                             # macOS (download a .sf2 se
 
 The submitted WAVs use TimGM6mb (`/usr/share/sounds/sf2/TimGM6mb.sf2` on Debian).
 
+## Checkpoints and generated results
+
+The checkpoints and the submitted listening samples are too large for git and are attached
+to the release [`submission-v1`](https://github.com/chijenpeng/26-fall-DeepMIR-HW2/releases/tag/submission-v1):
+
+| File | Content |
+|---|---|
+| `basic.pt` | GPT-2 for Basic A and B (step 5,000) |
+| `bonus.pt` | T5 for the Bonus (step 12,000) |
+| `basic-no-chord.pt` | ablation without chord tokens (not needed for the submitted results) |
+| `generated.zip` | Basic A (20 pieces), Basic B (3 prompts × 3 settings), Bonus (10 prompts), MIDI + WAV |
+| `r14725022_report.pdf` | report |
+| `SHA256SUMS.txt` | checksums |
+
+```bash
+mkdir -p models
+gh release download submission-v1 -R chijenpeng/26-fall-DeepMIR-HW2 -p 'basic.pt' -p 'bonus.pt' -D models
+# or download the two files from the release page into models/
+```
+
 ## Inference
 
 Checkpoints: `models/basic.pt` (Basic A/B), `models/bonus.pt` (Bonus). Every command
