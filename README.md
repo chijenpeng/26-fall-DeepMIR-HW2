@@ -12,10 +12,11 @@ Chi-Jen Peng (R14725022)
 
 ## Setup
 
-Python 3.12. Install PyTorch for your platform first if you need a specific CUDA build.
+**Python 3.12 is required** (`pyproject.toml` pins `>=3.12,<3.13`). Install PyTorch for your
+platform first if you need a specific CUDA build.
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -44,8 +45,9 @@ to the release [`submission-v1`](https://github.com/chijenpeng/26-fall-DeepMIR-H
 
 ```bash
 mkdir -p models
-gh release download submission-v1 -R chijenpeng/26-fall-DeepMIR-HW2 -p 'basic.pt' -p 'bonus.pt' -D models
-# or download the two files from the release page into models/
+URL=https://github.com/chijenpeng/26-fall-DeepMIR-HW2/releases/download/submission-v1
+curl -L -o models/basic.pt $URL/basic.pt
+curl -L -o models/bonus.pt $URL/bonus.pt
 ```
 
 ## Inference
@@ -53,6 +55,11 @@ gh release download submission-v1 -R chijenpeng/26-fall-DeepMIR-HW2 -p 'basic.pt
 Checkpoints: `models/basic.pt` (Basic A/B), `models/bonus.pt` (Bonus). Every command
 writes `NNN.mid`, `NNN.wav` (when `--soundfont` is given) and `generation.json`
 (seeds, settings, tokens) into `--output`. Drop `--soundfont` to write MIDI only.
+
+`--prompts` is the TA prompt folder with one subfolder per prompt:
+`basic-b/<id>/{<id>.mid, beat_midi.txt, chord_midi.txt}` and
+`bonus/<id>/{melody.mid, beat_midi.txt}` (other files are ignored). Output files are named
+after the prompt folders.
 
 ```bash
 SF=/usr/share/sounds/sf2/TimGM6mb.sf2
