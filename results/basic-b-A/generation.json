@@ -1,0 +1,30 @@
+{
+ "checkpoint": "models/basic.pt",
+ "mode": "continue",
+ "bars": 24,
+ "sampling": {
+  "temperature": 0.9,
+  "top_k": 20,
+  "top_p": 1.0
+ },
+ "pieces": [
+  {
+   "name": "001",
+   "seed": 2026,
+   "notes": 557,
+   "capped_bars": 0
+  },
+  {
+   "name": "002",
+   "seed": 2027,
+   "notes": 620,
+   "capped_bars": 0
+  },
+  {
+   "name": "003",
+   "seed": 2028,
+   "notes": 1033,
+   "capped_bars": 0
+  }
+ ]
+}

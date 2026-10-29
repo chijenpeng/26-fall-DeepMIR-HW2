@@ -1,0 +1,72 @@
+{
+ "checkpoint": "models/bonus.pt",
+ "mode": "accompany",
+ "bars": 32,
+ "sampling": {
+  "temperature": 0.7,
+  "top_k": 5,
+  "top_p": 1.0
+ },
+ "pieces": [
+  {
+   "name": "001",
+   "seed": 2026,
+   "notes": 393,
+   "capped_bars": 0
+  },
+  {
+   "name": "002",
+   "seed": 2027,
+   "notes": 199,
+   "capped_bars": 0
+  },
+  {
+   "name": "003",
+   "seed": 2028,
+   "notes": 253,
+   "capped_bars": 0
+  },
+  {
+   "name": "004",
+   "seed": 2029,
+   "notes": 291,
+   "capped_bars": 0
+  },
+  {
+   "name": "005",
+   "seed": 2030,
+   "notes": 342,
+   "capped_bars": 0
+  },
+  {
+   "name": "006",
+   "seed": 2031,
+   "notes": 197,
+   "capped_bars": 0
+  },
+  {
+   "name": "007",
+   "seed": 2032,
+   "notes": 358,
+   "capped_bars": 0
+  },
+  {
+   "name": "008",
+   "seed": 2033,
+   "notes": 460,
+   "capped_bars": 0
+  },
+  {
+   "name": "009",
+   "seed": 2034,
+   "notes": 410,
+   "capped_bars": 0
+  },
+  {
+   "name": "010",
+   "seed": 2035,
+   "notes": 198,
+   "capped_bars": 0
+  }
+ ]
+}

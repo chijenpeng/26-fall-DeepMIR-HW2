@@ -1,0 +1,132 @@
+{
+ "checkpoint": "models/basic-no-chord.pt",
+ "mode": "unconditional",
+ "bars": 32,
+ "sampling": {
+  "temperature": 0.9,
+  "top_k": 20,
+  "top_p": 1.0
+ },
+ "pieces": [
+  {
+   "name": "001",
+   "seed": 2026,
+   "notes": 476,
+   "capped_bars": 0
+  },
+  {
+   "name": "002",
+   "seed": 2027,
+   "notes": 773,
+   "capped_bars": 0
+  },
+  {
+   "name": "003",
+   "seed": 2028,
+   "notes": 1060,
+   "capped_bars": 0
+  },
+  {
+   "name": "004",
+   "seed": 2029,
+   "notes": 735,
+   "capped_bars": 0
+  },
+  {
+   "name": "005",
+   "seed": 2030,
+   "notes": 725,
+   "capped_bars": 0
+  },
+  {
+   "name": "006",
+   "seed": 2031,
+   "notes": 787,
+   "capped_bars": 0
+  },
+  {
+   "name": "007",
+   "seed": 2032,
+   "notes": 814,
+   "capped_bars": 0
+  },
+  {
+   "name": "008",
+   "seed": 2033,
+   "notes": 796,
+   "capped_bars": 0
+  },
+  {
+   "name": "009",
+   "seed": 2034,
+   "notes": 1046,
+   "capped_bars": 0
+  },
+  {
+   "name": "010",
+   "seed": 2035,
+   "notes": 680,
+   "capped_bars": 0
+  },
+  {
+   "name": "011",
+   "seed": 2036,
+   "notes": 962,
+   "capped_bars": 0
+  },
+  {
+   "name": "012",
+   "seed": 2037,
+   "notes": 792,
+   "capped_bars": 0
+  },
+  {
+   "name": "013",
+   "seed": 2038,
+   "notes": 902,
+   "capped_bars": 0
+  },
+  {
+   "name": "014",
+   "seed": 2039,
+   "notes": 877,
+   "capped_bars": 0
+  },
+  {
+   "name": "015",
+   "seed": 2040,
+   "notes": 624,
+   "capped_bars": 0
+  },
+  {
+   "name": "016",
+   "seed": 2041,
+   "notes": 691,
+   "capped_bars": 0
+  },
+  {
+   "name": "017",
+   "seed": 2042,
+   "notes": 783,
+   "capped_bars": 0
+  },
+  {
+   "name": "018",
+   "seed": 2043,
+   "notes": 896,
+   "capped_bars": 0
+  },
+  {
+   "name": "019",
+   "seed": 2044,
+   "notes": 836,
+   "capped_bars": 0
+  },
+  {
+   "name": "020",
+   "seed": 2045,
+   "notes": 736,
+   "capped_bars": 0
+  }
+ ]
+}
